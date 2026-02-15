@@ -56,7 +56,7 @@ Erledigt ist v0.1.0 erst, wenn:
 - Tauri v2 App scaffold
 - React/Vite/TS + Tailwind einrichten
 - `pnpm` als Package Manager
-- App Name überall: **uvnvpy**, Version: **0.1.0**, Author: **sinus**
+- App Name überall: **uvnvpy**, Version: **0.1.0**, Author: **Youssef Serestou**
 
 ### Step 2 — Theme Tokens
 - In `src/styles/tokens.css` oben ein Token-Block:
