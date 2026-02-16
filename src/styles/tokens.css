@@ -1,11 +1,28 @@
 :root {
-  --bg: #0f172a;
-  --panel: #111827;
-  --panel2: #1f2937;
-  --text: #f9fafb;
-  --muted: #9ca3af;
-  --accent: #22c55e;
-  --accent2: #14b8a6;
-  --border: #334155;
-  --danger: #ef4444;
+  --font-ui: 'Sora', 'Noto Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Mono', monospace;
+
+  --bg-0: #060a14;
+  --bg-1: #0c1527;
+  --bg-2: #111b2f;
+  --panel-0: #11192b;
+  --panel-1: #151f35;
+  --panel-2: #1a2842;
+  --panel-hover: #202f4d;
+
+  --text-0: #e8edf8;
+  --text-1: #cfd7ec;
+  --text-2: #9aa8c8;
+
+  --border-0: #2a3b60;
+  --border-1: #34456d;
+  --border-2: #3f5688;
+
+  --accent-0: #4dd5b0;
+  --accent-1: #2dbf98;
+  --accent-2: #1da17f;
+  --danger-0: #f06767;
+
+  --shadow-0: 0 12px 30px rgba(2, 8, 22, 0.45);
+  --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
