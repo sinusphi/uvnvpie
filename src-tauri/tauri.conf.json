@@ -12,14 +12,21 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "uvnvpy",
-        "width": 1280,
-        "height": 840,
+        "width": 1200,
+        "height": 800,
+        "minWidth": 1100,
+        "minHeight": 720,
+        "decorations": false,
         "resizable": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {
