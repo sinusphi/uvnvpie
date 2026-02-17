@@ -66,11 +66,13 @@ export default function ConsolePanel({
             ))}
           </div>
 
+          {/* Exit action intentionally hidden for now, keep implementation for later use.
           <div className="console-footer">
             <button type="button" className="exit-button" onClick={onExit}>
               {t('exit')}
             </button>
           </div>
+          */}
         </>
       ) : null}
     </section>
