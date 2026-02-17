@@ -19,6 +19,7 @@ body,
 
 body {
   font-family: var(--font-ui);
+  line-height: 1.34;
   color: var(--text-0);
   background: transparent;
   overflow: hidden;
@@ -415,13 +416,13 @@ button {
   min-height: 0;
   padding: 16px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   align-content: start;
 }
 
 .main-content.console-collapsed {
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .top-panels {
@@ -433,8 +434,9 @@ button {
 .tab-content-stack {
   min-height: 0;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 12px;
-  align-content: start;
+  align-content: stretch;
 }
 
 .header-panel,
@@ -545,6 +547,8 @@ button {
 .packages-section {
   padding: 12px;
   display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -578,13 +582,15 @@ button {
 .table-wrap {
   border: 1px solid var(--border-0);
   border-radius: 10px;
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
 }
 
 .packages-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
+  line-height: 1.28;
 }
 
 .packages-table thead tr {
@@ -593,9 +599,10 @@ button {
 
 .packages-table th,
 .packages-table td {
-  padding: 10px 12px;
+  padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid rgba(42, 59, 96, 0.52);
+  line-height: 1.28;
 }
 
 .packages-table th {
@@ -803,7 +810,7 @@ button {
   overflow: auto;
   font-family: var(--font-mono);
   font-size: 0.76rem;
-  line-height: 1.45;
+  line-height: 1.35;
   color: var(--text-1);
 }
 
@@ -999,11 +1006,11 @@ button {
   }
 
   .main-content {
-    grid-template-rows: auto auto minmax(220px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .main-content.console-collapsed {
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .packages-toolbar {
