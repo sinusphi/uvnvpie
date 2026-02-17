@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "uvnvpy",
+  "productName": "uvnvpie",
   "version": "0.1.0",
-  "identifier": "de.serestou.uvnvpy",
+  "identifier": "de.serestou.uvnvpie",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "uvnvpy",
+        "title": "uvnvpie",
         "width": 1280,
         "height": 900,
         "minWidth": 1100,
