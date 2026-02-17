@@ -728,7 +728,7 @@ button {
 .console-panel {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto auto;
   padding: 10px;
 }
 
@@ -805,6 +805,7 @@ button {
   border-radius: 10px;
   background: rgba(8, 12, 20, 0.85);
   padding: 10px;
+  max-height: calc(5 * 1.35em + 20px);
   overflow: auto;
   font-family: var(--font-mono);
   font-size: 0.76rem;
@@ -813,12 +814,8 @@ button {
 }
 
 .console-body p {
-  margin: 0 0 4px;
+  margin: 0;
   white-space: pre-wrap;
-}
-
-.console-body p:last-child {
-  margin-bottom: 0;
 }
 
 .console-footer {
