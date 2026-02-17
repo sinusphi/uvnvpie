@@ -1,7 +1,7 @@
 [package]
-name = "uvnvpy"
+name = "uvnvpie"
 version = "0.1.0"
-description = "uvnvpy"
+description = "uvnvpie"
 authors = ["Youssef Serestou"]
 license = "None"
 edition = "2021"
