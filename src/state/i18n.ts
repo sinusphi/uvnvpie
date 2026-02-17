@@ -3,7 +3,7 @@ import type { Language } from './store';
 
 const dictionary = {
   en: {
-    appTitle: 'uvnvpy',
+    appTitle: 'uvnvpie',
     createEnvironment: '+ Create Environment',
     environments: 'Environments',
     environmentLabel: 'Environment',
@@ -35,8 +35,8 @@ const dictionary = {
     settings: 'Settings',
     settingsTitle: 'Application Settings',
     about: 'About',
-    aboutTitle: 'About uvnvpy',
-    aboutText: 'uvnvpy 0.1.0. Main window prototype with mocked package actions.',
+    aboutTitle: 'About uvnvpie',
+    aboutText: 'uvnvpie 0.1.0. Main window prototype with mocked package actions.',
     language: 'Language',
     envRootDir: 'Environment Root Directory',
     uvBinaryPath: 'uv Binary Path',
@@ -65,7 +65,7 @@ const dictionary = {
     running: 'Running'
   },
   de: {
-    appTitle: 'uvnvpy',
+    appTitle: 'uvnvpie',
     createEnvironment: '+ Umgebung erstellen',
     environments: 'Umgebungen',
     environmentLabel: 'Umgebung',
@@ -97,8 +97,8 @@ const dictionary = {
     settings: 'Einstellungen',
     settingsTitle: 'Anwendungseinstellungen',
     about: 'Info',
-    aboutTitle: 'Uber uvnvpy',
-    aboutText: 'uvnvpy 0.1.0. Hauptfenster-Prototyp mit simulierten Paketaktionen.',
+    aboutTitle: 'Uber uvnvpie',
+    aboutText: 'uvnvpie 0.1.0. Hauptfenster-Prototyp mit simulierten Paketaktionen.',
     language: 'Sprache',
     envRootDir: 'Umgebungs-Root-Verzeichnis',
     uvBinaryPath: 'uv-Binary-Pfad',
