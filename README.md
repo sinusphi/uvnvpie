@@ -4,13 +4,13 @@
   <img src="assets/shot_01.png" alt="screenshot 01" />
 </p>
 
-[![Rust: 1.93.1](https://img.shields.io/badge/Rust-1.93.1-brown?logo=rust&logoColor=gold)](https://www.rust-lang.org/) 
-[![Tauri: 2.10.0](https://img.shields.io/badge/Tauri-2.10.0-yellow?logo=tauri&logoColor=cyan)](https://pypi.org/project/PyQt5) 
-[![Node.js: 24.13.1](https://img.shields.io/badge/Node.js-24.13.1-darkgreen?logo=node.js&logoColor=green)](https://pypi.org/project/PyQt5) 
-[![pnpm: 9.12.2](https://img.shields.io/badge/pnpm-9.12.2-blue?logo=pnpm&logoColor=green)](https://pypi.org/project/PyQt5) 
-[![Vite: 7.3.1](https://img.shields.io/badge/Vite-7.3.1-purple?logo=vite&logoColor=gold)](https://pypi.org/project/PyQt5) 
-[![Tailwind: 7.3.1](https://img.shields.io/badge/Tailwind-7.3.1-orange?logo=tailwindcss&logoColor=cyan)](https://pypi.org/project/PyQt5) 
-[![React: 19.2.4](https://img.shields.io/badge/React-19.2.4-darkcyan?logo=react&logoColor=cyan)](https://pypi.org/project/PyQt5) 
+[![Rust: 1.93.1](https://img.shields.io/badge/Rust-1.93.1-brown?logo=rust&logoColor=gold)](https://www.rust-lang.org) 
+[![Tauri: 2.10.0](https://img.shields.io/badge/Tauri-2.10.0-yellow?logo=tauri&logoColor=cyan)](https://v2.tauri.app) 
+[![Node.js: 24.13.1](https://img.shields.io/badge/Node.js-24.13.1-darkgreen?logo=node.js&logoColor=green)](https://nodejs.org/en) 
+[![pnpm: 9.12.2](https://img.shields.io/badge/pnpm-9.12.2-blue?logo=pnpm&logoColor=green)](https://pnpm.io) 
+[![Vite: 7.3.1](https://img.shields.io/badge/Vite-7.3.1-purple?logo=vite&logoColor=gold)](https://vite.dev) 
+[![Tailwind: 7.3.1](https://img.shields.io/badge/Tailwind-7.3.1-orange?logo=tailwindcss&logoColor=cyan)](https://tailwindcss.com) 
+[![React: 19.2.4](https://img.shields.io/badge/React-19.2.4-darkcyan?logo=react&logoColor=cyan)](https://react.dev) 
 [![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou) 
 
 uvnvpie ist eine Desktop-Anwendung auf Basis von Tauri v2, React und Rust.  
