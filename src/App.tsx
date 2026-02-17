@@ -80,6 +80,7 @@ export default function App() {
   const [isJobRunning, setIsJobRunning] = useState(false);
   const [isConsoleCollapsed, setIsConsoleCollapsed] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(() => document.hasFocus());
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
   const timersRef = useRef<number[]>([]);
   const jobTokenRef = useRef(0);
@@ -172,6 +173,15 @@ export default function App() {
     });
   };
 
+  const syncWindowMaximizedState = async () => {
+    try {
+      const maximized = await getCurrentWindow().isMaximized();
+      setIsWindowMaximized(maximized);
+    } catch (error) {
+      console.error('window maximize state sync failed', error);
+    }
+  };
+
   const runWindowAction = async (action: 'minimize' | 'maximize' | 'close') => {
     try {
       const appWindow = getCurrentWindow();
@@ -182,6 +192,7 @@ export default function App() {
 
       if (action === 'maximize') {
         await appWindow.toggleMaximize();
+        await syncWindowMaximizedState();
       }
 
       if (action === 'close') {
@@ -460,6 +471,54 @@ export default function App() {
       window.removeEventListener('blur', handleBlur);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const appWindow = getCurrentWindow();
+
+    const syncState = async () => {
+      try {
+        const maximized = await appWindow.isMaximized();
+
+        if (active) {
+          setIsWindowMaximized(maximized);
+        }
+      } catch (error) {
+        console.error('window maximize listener failed', error);
+      }
+    };
+
+    void syncState();
+
+    let unlistenResized: (() => void) | null = null;
+
+    void appWindow
+      .onResized(() => {
+        void syncState();
+      })
+      .then((unlisten) => {
+        unlistenResized = unlisten;
+      })
+      .catch((error) => {
+        console.error('window resize listener registration failed', error);
+      });
+
+    return () => {
+      active = false;
+
+      if (unlistenResized) {
+        unlistenResized();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle('window-maximized', isWindowMaximized);
+
+    return () => {
+      document.body.classList.remove('window-maximized');
+    };
+  }, [isWindowMaximized]);
 
   useEffect(() => {
     return () => {
