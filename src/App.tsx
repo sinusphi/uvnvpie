@@ -67,6 +67,8 @@ export default function App() {
   const [uvVersion, setUvVersion] = useState('...');
   const [consoleLines, setConsoleLines] = useState<string[]>(initialConsoleLines);
   const [isJobRunning, setIsJobRunning] = useState(false);
+  const [isConsoleCollapsed, setIsConsoleCollapsed] = useState(false);
+  const [isWindowFocused, setIsWindowFocused] = useState(() => document.hasFocus());
 
   const timersRef = useRef<number[]>([]);
   const jobTokenRef = useRef(0);
@@ -141,17 +143,6 @@ export default function App() {
 
       timersRef.current.push(timer);
     });
-  };
-
-  const abortJob = () => {
-    if (!isJobRunning) {
-      return;
-    }
-
-    jobTokenRef.current += 1;
-    clearTimers();
-    setIsJobRunning(false);
-    appendConsole(t('jobAborted'));
   };
 
   const runWindowAction = async (action: 'minimize' | 'maximize' | 'close') => {
@@ -320,6 +311,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const handleFocus = () => {
+      setIsWindowFocused(true);
+    };
+
+    const handleBlur = () => {
+      setIsWindowFocused(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       clearTimers();
     };
@@ -337,90 +346,118 @@ export default function App() {
   const uninstallLabel = selectedPackage ? `${t('uninstall')} ${selectedPackage.name}` : t('uninstall');
 
   return (
-    <div className="app-window">
-      <Titlebar
-        title={t('appTitle')}
-        onOpenSettings={openSettings}
-        onOpenAbout={() => setIsAboutOpen(true)}
-        onMinimize={() => void runWindowAction('minimize')}
-        onToggleMaximize={() => void runWindowAction('maximize')}
-        onClose={() => void runWindowAction('close')}
-        t={t}
-      />
-
-      <div className="main-layout">
-        <Sidebar
-          environments={environments}
-          selectedEnvironmentId={selectedEnvironmentId}
-          onSelectEnvironment={setSelectedEnvironmentId}
-          onCreateEnvironment={() => appendConsole(t('createEnvironmentPending'))}
-          t={t}
-        />
-
-        <main className="main-content">
-          <section className="top-panels">
-            <HeaderPanel environment={selectedEnvironment} t={t} />
-            <InterpreterCard pythonVersion={selectedEnvironment.pythonVersion} uvVersion={uvVersion} t={t} />
-          </section>
-
-          <Tabs tabs={tabs} activeTab={activeTab} onChangeTab={setActiveTab} />
-
-          {activeTab === 'packages' ? (
-            <>
-              <PackagesTable
-                packages={packages}
-                selectedPackageId={selectedPackage?.id ?? ''}
-                onSelectPackage={setSelectedPackageId}
-                onInstallPackage={() => startMockJob(installPackageLabel)}
-                onUpdateAll={() => startMockJob(t('updateAll'))}
-                disabled={isJobRunning}
-                t={t}
-              />
-
-              <section className="bottom-panels">
-                <DetailsPanel packageItem={selectedPackage} t={t} />
-                <ActionsPanel
-                  onInstall={() => startMockJob(installLabel)}
-                  onUpgrade={() => startMockJob(upgradeLabel)}
-                  onUninstall={() => startMockJob(uninstallLabel)}
-                  onExportRequirements={() => startMockJob(t('exportRequirements'))}
-                  disabled={isJobRunning || !selectedPackage}
-                  t={t}
-                />
-              </section>
-            </>
-          ) : (
-            <section className="placeholder-panel">
-              <p>{activeTab === 'dependencyTree' ? t('dependencyTreePlaceholder') : t('requirementsPlaceholder')}</p>
-            </section>
-          )}
-
-          <ConsolePanel
-            lines={consoleLines}
-            isJobRunning={isJobRunning}
-            onAbort={abortJob}
-            onClear={() => setConsoleLines([])}
+    <div className={`window-shell ${isWindowFocused ? 'is-active' : 'is-inactive'}`}>
+      <div className="window-frame">
+        <div className="app-window">
+          <Titlebar
+            title={t('appTitle')}
+            onOpenSettings={openSettings}
+            onOpenAbout={() => setIsAboutOpen(true)}
+            onMinimize={() => void runWindowAction('minimize')}
+            onToggleMaximize={() => void runWindowAction('maximize')}
+            onClose={() => void runWindowAction('close')}
             t={t}
           />
-        </main>
+
+          <div className="main-layout">
+            <Sidebar
+              environments={environments}
+              selectedEnvironmentId={selectedEnvironmentId}
+              onSelectEnvironment={setSelectedEnvironmentId}
+              onCreateEnvironment={() => appendConsole(t('createEnvironmentPending'))}
+              t={t}
+            />
+
+            <main className={`main-content${isConsoleCollapsed ? ' console-collapsed' : ''}`}>
+              <section className="top-panels">
+                <HeaderPanel environment={selectedEnvironment} t={t} />
+                <InterpreterCard pythonVersion={selectedEnvironment.pythonVersion} uvVersion={uvVersion} t={t} />
+              </section>
+
+              <section className="tab-content-stack">
+                <section className="packages-section">
+                  <div className="packages-toolbar">
+                    <Tabs tabs={tabs} activeTab={activeTab} onChangeTab={setActiveTab} />
+                    {activeTab === 'packages' ? (
+                      <div className="packages-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={isJobRunning}
+                          onClick={() => startMockJob(installPackageLabel)}
+                        >
+                          {t('installPackage')}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={isJobRunning}
+                          onClick={() => startMockJob(t('updateAll'))}
+                        >
+                          {t('updateAll')}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {activeTab === 'packages' ? (
+                    <PackagesTable
+                      packages={packages}
+                      selectedPackageId={selectedPackage?.id ?? ''}
+                      onSelectPackage={setSelectedPackageId}
+                      t={t}
+                    />
+                  ) : (
+                    <div className="packages-placeholder">
+                      <p>{activeTab === 'dependencyTree' ? t('dependencyTreePlaceholder') : t('requirementsPlaceholder')}</p>
+                    </div>
+                  )}
+                </section>
+
+                {activeTab === 'packages' ? (
+                  <section className="bottom-panels">
+                    <DetailsPanel packageItem={selectedPackage} t={t} />
+                    <ActionsPanel
+                      onInstall={() => startMockJob(installLabel)}
+                      onUpgrade={() => startMockJob(upgradeLabel)}
+                      onUninstall={() => startMockJob(uninstallLabel)}
+                      onExportRequirements={() => startMockJob(t('exportRequirements'))}
+                      disabled={isJobRunning || !selectedPackage}
+                      t={t}
+                    />
+                  </section>
+                ) : null}
+              </section>
+
+              <ConsolePanel
+                lines={consoleLines}
+                collapsed={isConsoleCollapsed}
+                onToggleCollapsed={() => setIsConsoleCollapsed((previous) => !previous)}
+                onExit={() => void runWindowAction('close')}
+                onClear={() => setConsoleLines([])}
+                t={t}
+              />
+            </main>
+          </div>
+
+          <SettingsDialog
+            open={isSettingsOpen}
+            draft={settingsDraft}
+            isSaving={isSettingsSaving}
+            onChange={(next) => {
+              setSettingsDraft(next);
+              setLanguage(next.language);
+            }}
+            onBrowseEnvRoot={() => void browseEnvRoot()}
+            onBrowseUvBinary={() => void browseUvBinary()}
+            onSave={() => void saveSettings()}
+            onCancel={() => void closeSettings()}
+            t={t}
+          />
+
+          <AboutDialog open={isAboutOpen} onClose={() => setIsAboutOpen(false)} t={t} />
+        </div>
       </div>
-
-      <SettingsDialog
-        open={isSettingsOpen}
-        draft={settingsDraft}
-        isSaving={isSettingsSaving}
-        onChange={(next) => {
-          setSettingsDraft(next);
-          setLanguage(next.language);
-        }}
-        onBrowseEnvRoot={() => void browseEnvRoot()}
-        onBrowseUvBinary={() => void browseUvBinary()}
-        onSave={() => void saveSettings()}
-        onCancel={() => void closeSettings()}
-        t={t}
-      />
-
-      <AboutDialog open={isAboutOpen} onClose={() => setIsAboutOpen(false)} t={t} />
     </div>
   );
 }
