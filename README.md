@@ -1,7 +1,7 @@
 # uvnvpie
 
-`uvnvpie` ist eine Desktop-Anwendung auf Basis von Tauri v2, React und Rust.  
-Die App scannt lokale Python-Umgebungen, liest installierte Pakete pro Interpreter aus und bietet eine solide UI-Basis fuer spaetere `uv`-Aktionen.
+uvnvpie ist eine Desktop-Anwendung auf Basis von Tauri v2, React und Rust.  
+Die App scannt lokale Python-Umgebungen, liest installierte Pakete pro Interpreter aus und bietet eine solide UI-Basis für spätere `uv`-Aktionen.
 
 <p align="center">
   <img src="assets/shot_01.png" alt="screenshot 01" />
@@ -11,26 +11,26 @@ Die App scannt lokale Python-Umgebungen, liest installierte Pakete pro Interpret
 
 | Bereich | Stand |
 | --- | --- |
-| Version | `0.1.1` (`2026-02-17`) |
+| Version | `0.1.1` 2026-02-17 |
 | Plattformen | Linux, Windows |
 | Live-Daten | Umgebungen, Paketlisten, `uv --version` |
 | Paketaktionen | In der UI vorhanden, aktuell simuliert |
 
 ## Funktionsumfang
 
-- Vollstaendiges Hauptfenster mit Sidebar, Header, Tabs, Paketliste, Details, Aktionen und Konsolenbereich.
+- Vollständiges Hauptfenster mit Sidebar, Header, Tabs, Paketliste, Details, Aktionen und Konsolenbereich.
 - Erkennung lokaler Python-Umgebungen und Laden installierter Pakete pro Umgebung.
-- Settings-Dialog mit Persistenz ueber `tauri-plugin-store`.
-- Ordner-/Dateiauswahl ueber `tauri-plugin-dialog`.
+- Settings-Dialog mit Persistenz über `tauri-plugin-store`.
+- Ordner-/Dateiauswahl über `tauri-plugin-dialog`.
 - Sprachwechsel zwischen Deutsch und Englisch direkt in der App.
 - Benutzerdefinierte Titlebar mit Minimize/Maximize/Close.
 
 ## Voraussetzungen
 
-- Node.js `20+`
-- `pnpm` `9+`
-- Rust `stable` (im Projekt mindestens `1.77`)
-- Tauri-Systemvoraussetzungen gemaess offizieller Doku:  
+- **Node.js** 20+
+- **pnpm** 9+
+- **Rust** stable (1.77+)
+- **Tauri**-Systemvoraussetzungen gemäß offizieller Doku:  
   https://v2.tauri.app/start/prerequisites/
 
 ## Installation
@@ -63,13 +63,13 @@ pnpm tauri build
 
 1. App mit `pnpm tauri dev` starten.
 2. In den Einstellungen bei Bedarf ein eigenes Umgebungs-Root setzen.
-3. Umgebung in der Sidebar waehlen.
-4. Pakete, Details und Konsolenausgabe im Hauptbereich pruefen.
+3. Umgebung in der Sidebar wählen.
+4. Pakete, Details und Konsolenausgabe im Hauptbereich prüfen.
 
 ## Umgebungs-Erkennung
 
 Wenn in den Einstellungen ein Root-Verzeichnis gesetzt ist, wird nur dort gesucht.  
-Ohne explizites Root nutzt die App standardmaessig:
+Ohne explizites Root nutzt die App standardmäßig:
 
 - `~/.virtualenvs`
 - `~/.venvs`
@@ -94,14 +94,14 @@ Eine Umgebung wird erkannt, wenn ein Interpreter unter einem dieser Pfade gefund
 ## Bekannte Grenzen
 
 - `Install`, `Upgrade`, `Uninstall`, `Update All` und `Export Requirements` sind aktuell Mock-Aktionen.
-- Tabs fuer `Dependency Tree` und `Requirements` sind Platzhalter.
-- Die Einstellung `uvBinaryPath` wird gespeichert, aber derzeit noch nicht fuer Command-Ausfuehrung verwendet.
+- Tabs für `Dependency Tree` und `Requirements` sind Platzhalter.
+- Die Einstellung `uvBinaryPath` wird gespeichert, aber derzeit noch nicht für Command-Ausführung verwendet.
 - Die Spalte `Latest` zeigt momentan denselben Wert wie `Version`.
 
 ## Changelog
 
-Siehe `CHANGELOG.md`.
+Siehe [CHANGELOG.md](https://github.com/sinusphi/uvnvpie/blob/prep_v0.1.1_release/CHANGELOG.md).
 
 ## Lizenz
 
-Siehe `LICENSE` (aktuell als Platzhalter gepflegt).
+Siehe [LICENSE](https://github.com/sinusphi/uvnvpie/blob/prep_v0.1.1_release/LICENSE) (aktuell als Platzhalter gepflegt).
