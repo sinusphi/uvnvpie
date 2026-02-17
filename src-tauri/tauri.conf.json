@@ -14,11 +14,13 @@
       {
         "label": "main",
         "title": "uvnvpy",
-        "width": 1200,
-        "height": 800,
+        "width": 1280,
+        "height": 900,
         "minWidth": 1100,
         "minHeight": 720,
         "decorations": false,
+        "transparent": true,
+        "backgroundColor": "#00000000",
         "resizable": true
       }
     ],
