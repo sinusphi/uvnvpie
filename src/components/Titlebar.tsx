@@ -52,7 +52,7 @@ export default function Titlebar({
         <span className="titlebar-title">{title}</span>
       </div>
 
-      <div className="titlebar-right">
+      <div className="titlebar-right" data-tauri-drag-region>
         <button
           type="button"
           className="titlebar-icon-btn"
