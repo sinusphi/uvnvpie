@@ -18,6 +18,8 @@
   - Installed packages are loaded per environment via the interpreter.
 - Project/app name standardized to `uvnvpie`.
 - Window appearance revised (rounded frame, accent lights, focus/idle transitions).
+- Release metadata aligned to `0.1.1` across app manifests and docs.
+- README now available in German and English (`README.md`, `README.en.md`).
 
 ### Fixed
 
