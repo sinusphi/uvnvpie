@@ -1,4 +1,4 @@
-# uvnvpy
+# uvnvpie
 
 Basis-Setup für **Tauri v2 + React/Vite + TypeScript + Tailwind**.
 
