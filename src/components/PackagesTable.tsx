@@ -1,4 +1,4 @@
-import type { PackageItem } from '../mock/data';
+import type { PackageItem } from '../types/domain';
 import type { I18nKey } from '../state/i18n';
 
 interface PackagesTableProps {

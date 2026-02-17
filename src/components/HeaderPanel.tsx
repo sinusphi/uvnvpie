@@ -1,4 +1,4 @@
-import type { EnvironmentItem } from '../mock/data';
+import type { EnvironmentItem } from '../types/domain';
 import type { I18nKey } from '../state/i18n';
 
 interface HeaderPanelProps {

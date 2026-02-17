@@ -1,9 +1,9 @@
 [package]
 name = "uvnvpie"
-version = "0.1.0"
+version = "0.1.1"
 description = "uvnvpie"
 authors = ["Youssef Serestou"]
-license = "None"
+license = "UNLICENSED"
 edition = "2021"
 rust-version = "1.77"
 

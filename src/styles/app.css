@@ -1,8 +1,6 @@
-/* stylelint-disable at-rule-no-unknown */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* stylelint-enable at-rule-no-unknown */
 
 * {
   box-sizing: border-box;
@@ -19,6 +17,7 @@ body,
 
 body {
   font-family: var(--font-ui);
+  line-height: 1.20;
   color: var(--text-0);
   background: transparent;
   overflow: hidden;
@@ -28,15 +27,19 @@ body {
   padding: 18px;
 }
 
+body.window-maximized #root {
+  padding: 0;
+}
+
 .window-shell {
   position: relative;
   width: 100%;
   height: 100%;
   border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(124, 199, 255, 0.78);
+  border: 1.5px solid rgba(124, 199, 255, 0.9);
   background: linear-gradient(180deg, rgba(8, 12, 22, 0.62), rgba(6, 9, 16, 0.66));
-  box-shadow: 0 0 0 1px rgba(124, 199, 255, 0.32);
+  box-shadow: 0 0 0 2px rgba(124, 199, 255, 0.32);
   transition:
     border-color 620ms cubic-bezier(0.22, 0.78, 0.25, 1),
     background-color 620ms cubic-bezier(0.22, 0.78, 0.25, 1);
@@ -45,12 +48,12 @@ body {
 .window-shell::before {
   content: '';
   position: absolute;
-  inset: -8px;
+  inset: -10px;
   border-radius: 24px;
   pointer-events: none;
   box-shadow:
-    0 0 16px rgba(124, 199, 255, 0.3),
-    0 0 34px rgba(124, 199, 255, 0.19);
+    0 0 26px rgba(124, 199, 255, 0.52),
+    0 0 54px rgba(124, 199, 255, 0.34);
   opacity: 1;
   transition: opacity 920ms cubic-bezier(0.22, 0.78, 0.25, 1);
 }
@@ -61,10 +64,10 @@ body {
   inset: 1px;
   border-radius: 16px;
   pointer-events: none;
-  border: 1px solid rgba(125, 182, 255, 0.15);
+  border: 1px solid rgba(125, 182, 255, 0.24);
   box-shadow:
-    inset 0 0 0 1px rgba(124, 199, 255, 0.16),
-    inset 0 0 5px rgba(124, 199, 255, 0.08);
+    inset 0 0 0 2px rgba(124, 199, 255, 0.24),
+    inset 0 0 9px rgba(124, 199, 255, 0.16);
   opacity: 1;
   transition: opacity 820ms cubic-bezier(0.22, 0.78, 0.25, 1);
 }
@@ -415,13 +418,13 @@ button {
   min-height: 0;
   padding: 16px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   align-content: start;
 }
 
 .main-content.console-collapsed {
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .top-panels {
@@ -433,8 +436,9 @@ button {
 .tab-content-stack {
   min-height: 0;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 12px;
-  align-content: start;
+  align-content: stretch;
 }
 
 .header-panel,
@@ -474,7 +478,7 @@ button {
   color: var(--text-2);
   font-family: var(--font-mono);
   font-size: 0.79rem;
-  line-height: 1.45;
+  line-height: 1.0;
 }
 
 .interpreter-card {
@@ -545,6 +549,8 @@ button {
 .packages-section {
   padding: 12px;
   display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -578,13 +584,15 @@ button {
 .table-wrap {
   border: 1px solid var(--border-0);
   border-radius: 10px;
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
 }
 
 .packages-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
+  line-height: 1.0;
 }
 
 .packages-table thead tr {
@@ -593,9 +601,10 @@ button {
 
 .packages-table th,
 .packages-table td {
-  padding: 10px 12px;
+  padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid rgba(42, 59, 96, 0.52);
+  line-height: 1.0;
 }
 
 .packages-table th {
@@ -723,7 +732,7 @@ button {
 .console-panel {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto auto;
   padding: 10px;
 }
 
@@ -800,20 +809,17 @@ button {
   border-radius: 10px;
   background: rgba(8, 12, 20, 0.85);
   padding: 10px;
+  max-height: calc(5 * 1.35em + 20px);
   overflow: auto;
   font-family: var(--font-mono);
   font-size: 0.76rem;
-  line-height: 1.45;
+  line-height: 1.20;
   color: var(--text-1);
 }
 
 .console-body p {
-  margin: 0 0 4px;
+  margin: 0;
   white-space: pre-wrap;
-}
-
-.console-body p:last-child {
-  margin-bottom: 0;
 }
 
 .console-footer {
@@ -999,11 +1005,11 @@ button {
   }
 
   .main-content {
-    grid-template-rows: auto auto minmax(220px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .main-content.console-collapsed {
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .packages-toolbar {
