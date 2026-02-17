@@ -18,7 +18,7 @@ export default function ActionsPanel({
   t
 }: ActionsPanelProps) {
   return (
-    <section className="info-panel">
+    <section className="info-panel actions-panel">
       <header>
         <h3>{t('actions')}</h3>
       </header>
