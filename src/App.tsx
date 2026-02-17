@@ -13,7 +13,7 @@ import SettingsDialog from './components/SettingsDialog';
 import Sidebar from './components/Sidebar';
 import Tabs from './components/Tabs';
 import Titlebar from './components/Titlebar';
-import { environments, initialConsoleLines, packagesByEnvironment } from './mock/data';
+import { fetchEnvironmentPackages, fetchEnvironments } from './state/backend';
 import { useI18n } from './state/i18n';
 import {
   DEFAULT_SETTINGS,
@@ -23,8 +23,15 @@ import {
   persistAppSettings,
   type Language
 } from './state/store';
+import type { EnvironmentItem, PackageItem } from './types/domain';
 
 type MainTab = 'packages' | 'dependencyTree' | 'requirements';
+
+const INITIAL_CONSOLE_LINES = [
+  '[boot] ui initialized',
+  '[boot] waiting for environment scan',
+  '[ready] waiting for user action'
+];
 
 async function showMessage(text: string, title = 'uvnvpie'): Promise<void> {
   try {
@@ -59,13 +66,17 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isSettingsReady, setIsSettingsReady] = useState(false);
 
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(environments[0]?.id ?? '');
-  const [selectedPackageId, setSelectedPackageId] = useState('requests');
+  const [environments, setEnvironments] = useState<EnvironmentItem[]>([]);
+  const [packagesByEnvironment, setPackagesByEnvironment] = useState<Record<string, PackageItem[]>>({});
+
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
+  const [selectedPackageId, setSelectedPackageId] = useState('');
   const [activeTab, setActiveTab] = useState<MainTab>('packages');
 
   const [uvVersion, setUvVersion] = useState('...');
-  const [consoleLines, setConsoleLines] = useState<string[]>(initialConsoleLines);
+  const [consoleLines, setConsoleLines] = useState<string[]>(INITIAL_CONSOLE_LINES);
   const [isJobRunning, setIsJobRunning] = useState(false);
   const [isConsoleCollapsed, setIsConsoleCollapsed] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(() => document.hasFocus());
@@ -76,12 +87,28 @@ export default function App() {
   const { t } = useI18n(language);
 
   const selectedEnvironment = useMemo(() => {
-    return environments.find((environment) => environment.id === selectedEnvironmentId) ?? environments[0] ?? null;
-  }, [selectedEnvironmentId]);
+    return environments.find((environment) => environment.id === selectedEnvironmentId) ?? null;
+  }, [environments, selectedEnvironmentId]);
+
+  const fallbackEnvironment = useMemo<EnvironmentItem>(() => {
+    return {
+      id: 'none',
+      name: t('notAvailable'),
+      pythonVersion: 'Python',
+      interpreterPath: t('notAvailable'),
+      location: t('notAvailable')
+    };
+  }, [t]);
+
+  const displayedEnvironment = selectedEnvironment ?? fallbackEnvironment;
 
   const packages = useMemo(() => {
-    return packagesByEnvironment[selectedEnvironmentId] ?? [];
-  }, [selectedEnvironmentId]);
+    if (!selectedEnvironment) {
+      return [];
+    }
+
+    return packagesByEnvironment[selectedEnvironment.id] ?? [];
+  }, [packagesByEnvironment, selectedEnvironment]);
 
   const selectedPackage = useMemo(() => {
     return packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
@@ -274,6 +301,10 @@ export default function App() {
       } catch (error) {
         console.error(error);
         await showMessage('Failed to load settings.', 'uvnvpie');
+      } finally {
+        if (alive) {
+          setIsSettingsReady(true);
+        }
       }
     };
 
@@ -283,6 +314,108 @@ export default function App() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSettingsReady) {
+      return;
+    }
+
+    let alive = true;
+
+    const loadEnvironmentList = async () => {
+      try {
+        const nextEnvironments = await fetchEnvironments(settings.envRootDir);
+
+        if (!alive) {
+          return;
+        }
+
+        setEnvironments(nextEnvironments);
+        setPackagesByEnvironment({});
+        setSelectedPackageId('');
+        setSelectedEnvironmentId((current) => {
+          if (nextEnvironments.some((environment) => environment.id === current)) {
+            return current;
+          }
+
+          return nextEnvironments[0]?.id ?? '';
+        });
+
+        appendConsole(
+          `[data] loaded ${nextEnvironments.length} environment(s)${settings.envRootDir ? ` from ${settings.envRootDir}` : ''}`
+        );
+      } catch (error) {
+        console.error(error);
+
+        if (!alive) {
+          return;
+        }
+
+        setEnvironments([]);
+        setPackagesByEnvironment({});
+        setSelectedEnvironmentId('');
+        setSelectedPackageId('');
+        appendConsole('[error] failed to load environment list');
+        await showMessage('Failed to load environments.', 'uvnvpie');
+      }
+    };
+
+    void loadEnvironmentList();
+
+    return () => {
+      alive = false;
+    };
+  }, [isSettingsReady, settings.envRootDir]);
+
+  useEffect(() => {
+    if (!selectedEnvironment) {
+      return;
+    }
+
+    if (packagesByEnvironment[selectedEnvironment.id]) {
+      return;
+    }
+
+    let alive = true;
+    const environment = selectedEnvironment;
+
+    const loadPackages = async () => {
+      try {
+        const nextPackages = await fetchEnvironmentPackages(environment.interpreterPath);
+
+        if (!alive) {
+          return;
+        }
+
+        setPackagesByEnvironment((previous) => ({
+          ...previous,
+          [environment.id]: nextPackages
+        }));
+
+        appendConsole(`[data] loaded ${nextPackages.length} package(s) for ${environment.name}`);
+      } catch (error) {
+        console.error(error);
+
+        if (!alive) {
+          return;
+        }
+
+        setPackagesByEnvironment((previous) => ({
+          ...previous,
+          [environment.id]: []
+        }));
+
+        appendConsole(`[error] failed to load packages for ${environment.name}`);
+        await showMessage('Failed to load package data for this environment.', 'uvnvpie');
+      }
+    };
+
+    void loadPackages();
+
+    return () => {
+      alive = false;
+    };
+  }, [selectedEnvironment, packagesByEnvironment]);
 
   useEffect(() => {
     let alive = true;
@@ -334,10 +467,6 @@ export default function App() {
     };
   }, []);
 
-  if (!selectedEnvironment) {
-    return null;
-  }
-
   const installPackageLabel = selectedPackage
     ? `${t('installPackage')} ${selectedPackage.name}`
     : t('installPackage');
@@ -370,8 +499,8 @@ export default function App() {
 
             <main className={`main-content${isConsoleCollapsed ? ' console-collapsed' : ''}`}>
               <section className="top-panels">
-                <HeaderPanel environment={selectedEnvironment} t={t} />
-                <InterpreterCard pythonVersion={selectedEnvironment.pythonVersion} uvVersion={uvVersion} t={t} />
+                <HeaderPanel environment={displayedEnvironment} t={t} />
+                <InterpreterCard pythonVersion={displayedEnvironment.pythonVersion} uvVersion={uvVersion} t={t} />
               </section>
 
               <section className="tab-content-stack">

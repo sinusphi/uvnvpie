@@ -1,4 +1,4 @@
-import type { EnvironmentItem } from '../mock/data';
+import type { EnvironmentItem } from '../types/domain';
 
 interface EnvironmentsListProps {
   environments: EnvironmentItem[];

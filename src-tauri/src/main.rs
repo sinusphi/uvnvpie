@@ -14,6 +14,16 @@ fn get_uv_version() -> String {
     uv::uv_version()
 }
 
+#[tauri::command(rename_all = "camelCase")]
+fn list_environments(env_root_dir: Option<String>) -> Result<Vec<uv::EnvironmentItem>, String> {
+    uv::list_environments(env_root_dir)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn list_environment_packages(interpreter_path: String) -> Result<Vec<uv::PackageItem>, String> {
+    uv::list_environment_packages(interpreter_path)
+}
+
 #[cfg(target_os = "linux")]
 fn apply_gtk_round_mask(window: &gtk::ApplicationWindow, radius: i32) {
     use gtk::cairo::{RectangleInt, Region};
@@ -106,7 +116,11 @@ fn main() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![get_uv_version])
+        .invoke_handler(tauri::generate_handler![
+            get_uv_version,
+            list_environments,
+            list_environment_packages
+        ])
         .run(tauri::generate_context!())
         .expect("error while running uvnvpie");
 }
