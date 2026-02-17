@@ -1,9 +1,11 @@
+import { useEffect, useRef } from 'react';
 import type { I18nKey } from '../state/i18n';
 
 interface ConsolePanelProps {
   lines: string[];
-  isJobRunning: boolean;
-  onAbort: () => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  onExit: () => void;
   onClear: () => void;
   t: (key: I18nKey) => string;
 }
@@ -18,11 +20,34 @@ function DotsIcon() {
   );
 }
 
-export default function ConsolePanel({ lines, isJobRunning, onAbort, onClear, t }: ConsolePanelProps) {
+export default function ConsolePanel({
+  lines,
+  collapsed,
+  onToggleCollapsed,
+  onExit,
+  onClear,
+  t
+}: ConsolePanelProps) {
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const toggleLabel = collapsed ? t('expandConsole') : t('collapseConsole');
+
+  useEffect(() => {
+    if (collapsed || !bodyRef.current) {
+      return;
+    }
+
+    bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [lines, collapsed]);
+
   return (
-    <section className="console-panel">
+    <section className={`console-panel${collapsed ? ' collapsed' : ''}`}>
       <header>
-        <h3>{t('consoleOutput')}</h3>
+        <div className="console-title-group">
+          <button type="button" className="console-collapse-button" onClick={onToggleCollapsed} aria-label={toggleLabel}>
+            <span className={collapsed ? 'chevron right' : 'chevron down'} aria-hidden="true" />
+          </button>
+          <h3>{t('consoleOutput')}</h3>
+        </div>
         <div className="console-tools">
           <button type="button" className="icon-button" onClick={onClear}>
             {t('clear')}
@@ -33,17 +58,21 @@ export default function ConsolePanel({ lines, isJobRunning, onAbort, onClear, t 
         </div>
       </header>
 
-      <div className="console-body">
-        {lines.map((line, index) => (
-          <p key={`${line}-${index}`}>{line}</p>
-        ))}
-      </div>
+      {!collapsed ? (
+        <>
+          <div ref={bodyRef} className="console-body">
+            {lines.map((line, index) => (
+              <p key={`${line}-${index}`}>{line}</p>
+            ))}
+          </div>
 
-      <div className="console-footer">
-        <button type="button" className="abort-button" onClick={onAbort} disabled={!isJobRunning}>
-          {t('abort')}
-        </button>
-      </div>
+          <div className="console-footer">
+            <button type="button" className="exit-button" onClick={onExit}>
+              {t('exit')}
+            </button>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }

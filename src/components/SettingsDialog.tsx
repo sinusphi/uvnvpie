@@ -74,10 +74,12 @@ export default function SettingsDialog({
         <div className="dialog-body">
           <label className="field-row">
             <span>{t('language')}</span>
-            <select value={draft.language} onChange={(event) => onLanguageChange(event.target.value)}>
-              <option value="de">Deutsch</option>
-              <option value="en">English</option>
-            </select>
+            <div className="select-wrap">
+              <select value={draft.language} onChange={(event) => onLanguageChange(event.target.value)}>
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+              </select>
+            </div>
           </label>
 
           <label className="field-row">
