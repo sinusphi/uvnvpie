@@ -7,6 +7,7 @@ use tauri::{window::Color, Manager};
 
 #[cfg(target_os = "linux")]
 use tauri::WebviewWindow;
+use tauri::{PhysicalPosition, PhysicalSize};
 
 #[tauri::command]
 fn get_uv_version() -> String {
@@ -63,10 +64,39 @@ fn apply_linux_window_rounding(window: &WebviewWindow, radius: i32) {
     }
 }
 
+fn apply_launch_margins(window: &WebviewWindow) {
+    const H_MARGIN: i32 = 28;
+    const V_MARGIN: i32 = 18;
+    const MIN_WIDTH: u32 = 1100;
+    const MIN_HEIGHT: u32 = 720;
+
+    if let Ok(Some(monitor)) = window.current_monitor() {
+        let work_area = monitor.work_area();
+        let work_width = work_area.size.width;
+        let work_height = work_area.size.height;
+
+        let preferred_width = work_width.saturating_sub((H_MARGIN * 2) as u32);
+        let preferred_height = work_height.saturating_sub((V_MARGIN * 2) as u32);
+
+        let target_width = preferred_width.max(MIN_WIDTH).min(work_width);
+        let target_height = preferred_height.max(MIN_HEIGHT).min(work_height);
+
+        let available_x = work_width.saturating_sub(target_width) as i32;
+        let available_y = work_height.saturating_sub(target_height) as i32;
+
+        let x = work_area.position.x + H_MARGIN.min(available_x.max(0));
+        let y = work_area.position.y + V_MARGIN.min(available_y.max(0));
+
+        let _ = window.set_size(PhysicalSize::new(target_width, target_height));
+        let _ = window.set_position(PhysicalPosition::new(x, y));
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
+                apply_launch_margins(&window);
                 let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
                 #[cfg(target_os = "linux")]
                 apply_linux_window_rounding(&window, 20);
@@ -78,5 +108,5 @@ fn main() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![get_uv_version])
         .run(tauri::generate_context!())
-        .expect("error while running uvnvpy");
+        .expect("error while running uvnvpie");
 }
