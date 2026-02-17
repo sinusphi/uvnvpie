@@ -4,7 +4,7 @@
   <img src="assets/shot_01.png" alt="screenshot 01" />
 </p>
 
-DE | [EN](README.en.md)
+EN | [DE](README.de.md)
 
 [![Rust: 1.77+](https://img.shields.io/badge/Rust-1.77%2B-brown?logo=rust&logoColor=gold)](https://www.rust-lang.org) 
 [![Tauri: 2.x](https://img.shields.io/badge/Tauri-2.x-yellow?logo=tauri&logoColor=cyan)](https://v2.tauri.app) 
@@ -15,33 +15,33 @@ DE | [EN](README.en.md)
 [![React: 18.3.1](https://img.shields.io/badge/React-18.3.1-darkcyan?logo=react&logoColor=cyan)](https://react.dev) 
 [![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou) 
 
-uvnvpie ist eine Desktop-Anwendung auf Basis von Tauri v2, React und Rust.  
-Die App scannt lokale Python-Umgebungen, liest installierte Pakete pro Interpreter aus und bietet eine solide UI-Basis für spätere `uv`-Aktionen.
+uvnvpie is a desktop application built with Tauri v2, React, and Rust.  
+The app scans local Python environments, reads installed packages per interpreter, and provides a solid UI foundation for future `uv` actions.
 
-## Projektstatus
+## Project Status
 
-| Bereich | Stand |
+| Area | Status |
 | --- | --- |
 | Version | **v0.1.1** / **2026-02-17** |
-| Plattformen | Linux, Windows |
-| Live-Daten | Umgebungen, Paketlisten, `uv --version` |
-| Paketaktionen | In der UI vorhanden, aktuell simuliert |
+| Platforms | Linux, Windows |
+| Live Data | Environments, package lists, `uv --version` |
+| Package Actions | Available in the UI, currently simulated |
 
-## Funktionsumfang
+## Features
 
-- Vollständiges Hauptfenster mit Sidebar, Header, Tabs, Paketliste, Details, Aktionen und Konsolenbereich.
-- Erkennung lokaler Python-Umgebungen und Laden installierter Pakete pro Umgebung.
-- Settings-Dialog mit Persistenz über `tauri-plugin-store`.
-- Ordner-/Dateiauswahl über `tauri-plugin-dialog`.
-- Sprachwechsel zwischen Deutsch und Englisch direkt in der App.
-- Benutzerdefinierte Titlebar mit Minimize/Maximize/Close.
+- Complete main window with sidebar, header, tabs, package table, details, actions, and console area.
+- Detection of local Python environments and loading installed packages per environment.
+- Settings dialog with persistence via `tauri-plugin-store`.
+- Folder/file picker via `tauri-plugin-dialog`.
+- In-app language switching between German and English.
+- Custom title bar with minimize/maximize/close.
 
-## Voraussetzungen
+## Requirements
 
 - **Node.js** 20+
 - **pnpm** 9+
 - **Rust** stable (1.77+)
-- **Tauri**-Systemvoraussetzungen gemäß offizieller Doku:  
+- **Tauri** system prerequisites according to official docs:  
   https://v2.tauri.app/start/prerequisites/
 
 ## Installation
@@ -50,15 +50,15 @@ Die App scannt lokale Python-Umgebungen, liest installierte Pakete pro Interpret
 pnpm install
 ```
 
-## Entwicklung
+## Development
 
-Komplette Desktop-App starten:
+Start the full desktop app:
 
 ```bash
 pnpm tauri dev
 ```
 
-Nur Frontend (Vite) starten:
+Start frontend only (Vite):
 
 ```bash
 pnpm dev
@@ -70,30 +70,30 @@ pnpm dev
 pnpm tauri build
 ```
 
-## Nutzung
+## Usage
 
-1. App mit `pnpm tauri dev` starten.
-2. In den Einstellungen bei Bedarf ein eigenes Umgebungs-Root setzen.
-3. Umgebung in der Sidebar wählen.
-4. Pakete, Details und Konsolenausgabe im Hauptbereich prüfen.
+1. Start the app with `pnpm tauri dev`.
+2. Optionally set a custom environment root in settings.
+3. Select an environment from the sidebar.
+4. Inspect packages, details, and console output in the main area.
 
-## Umgebungs-Erkennung
+## Environment Detection
 
-Wenn in den Einstellungen ein Root-Verzeichnis gesetzt ist, wird nur dort gesucht.  
-Ohne explizites Root nutzt die App standardmäßig:
+If an environment root directory is set in settings, only that path is scanned.  
+Without an explicit root, the app uses these defaults:
 
 - `~/.virtualenvs`
 - `~/.venvs`
 - `~/venvs`
 
-Eine Umgebung wird erkannt, wenn ein Interpreter unter einem dieser Pfade gefunden wird:
+An environment is detected when an interpreter exists at one of these paths:
 
 - `<env>/bin/python`
 - `<env>/bin/python3`
 - `<env>/Scripts/python.exe`
 - `<env>/Scripts/python`
 
-## Architektur
+## Architecture
 
 - Frontend: React + TypeScript + Vite + Tailwind
 - Desktop Runtime: Tauri v2
@@ -102,17 +102,17 @@ Eine Umgebung wird erkannt, wenn ein Interpreter unter einem dieser Pfade gefund
   - `list_environments`
   - `list_environment_packages`
 
-## Bekannte Grenzen
+## Known Limitations
 
-- `Install`, `Upgrade`, `Uninstall`, `Update All` und `Export Requirements` sind aktuell Mock-Aktionen.
-- Tabs für `Dependency Tree` und `Requirements` sind Platzhalter.
-- Die Einstellung `uvBinaryPath` wird gespeichert, aber derzeit noch nicht für Command-Ausführung verwendet.
-- Die Spalte `Latest` zeigt momentan denselben Wert wie `Version`.
+- `Install`, `Upgrade`, `Uninstall`, `Update All`, and `Export Requirements` are currently mock actions.
+- `Dependency Tree` and `Requirements` tabs are placeholders.
+- The `uvBinaryPath` setting is persisted but currently not used for command execution.
+- The `Latest` column currently shows the same value as `Version`.
 
 ## Changelog
 
-Siehe [CHANGELOG.md](CHANGELOG.md).
+See [CHANGELOG.md](CHANGELOG.md).
 
-## Lizenz
+## License
 
-Siehe [LICENSE](LICENSE).
+See [LICENSE](LICENSE).
