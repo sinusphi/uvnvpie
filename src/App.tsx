@@ -26,7 +26,7 @@ import {
 
 type MainTab = 'packages' | 'dependencyTree' | 'requirements';
 
-async function showMessage(text: string, title = 'uvnvpy'): Promise<void> {
+async function showMessage(text: string, title = 'uvnvpie'): Promise<void> {
   try {
     await message(text, { title });
   } catch (error) {
@@ -34,7 +34,7 @@ async function showMessage(text: string, title = 'uvnvpy'): Promise<void> {
   }
 }
 
-async function showConfirm(text: string, title = 'uvnvpy'): Promise<boolean> {
+async function showConfirm(text: string, title = 'uvnvpie'): Promise<boolean> {
   try {
     return await confirm(text, { title, kind: 'warning' });
   } catch (error) {
@@ -273,7 +273,7 @@ export default function App() {
         setLanguage(savedSettings.language);
       } catch (error) {
         console.error(error);
-        await showMessage('Failed to load settings.', 'uvnvpy');
+        await showMessage('Failed to load settings.', 'uvnvpie');
       }
     };
 
