@@ -41,7 +41,7 @@ export default function Titlebar({
         <div className="brand-mark" aria-hidden="true">
           <span />
         </div>
-        <span className="brand-name">uvnvpy</span>
+        <span className="brand-name">uvnvpie</span>
         <div className="titlebar-pills" data-tauri-drag-region>
           <span className="titlebar-pill" />
           <span className="titlebar-pill" />
