@@ -302,12 +302,28 @@ button {
   gap: 16px;
 }
 
+.sidebar-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.split-action {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  font-size: 0.78rem;
+}
+
 .sidebar-section {
   border: 1px solid var(--border-0);
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(17, 26, 45, 0.78), rgba(14, 22, 39, 0.88));
   padding: 12px;
   box-shadow: var(--shadow-1);
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .sidebar-section h2 {
@@ -319,12 +335,72 @@ button {
   font-weight: 600;
 }
 
+.workspace-groups-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-group-toggle {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 6px 9px;
+  background: rgba(12, 18, 31, 0.42);
+  color: var(--text-1);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.workspace-group-toggle:hover {
+  border-color: var(--border-1);
+  background: rgba(20, 31, 53, 0.72);
+}
+
+.workspace-group-toggle.active {
+  border-color: rgba(124, 199, 255, 0.44);
+  background: rgba(39, 67, 105, 0.5);
+}
+
+.workspace-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+}
+
+.sidebar-empty {
+  margin: 0 0 0 22px;
+  color: var(--text-2);
+  font-size: 0.78rem;
+}
+
 .environments-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workspace-group .environments-list {
+  margin-left: 18px;
 }
 
 .environment-entry {
@@ -418,13 +494,103 @@ button {
   min-height: 0;
   padding: 16px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 12px;
   align-content: start;
 }
 
 .main-content.console-collapsed {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.workspace-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  min-width: 140px;
+  max-width: 240px;
+  border: 1px solid var(--border-0);
+  border-radius: 10px;
+  background: rgba(16, 25, 43, 0.72);
+}
+
+.workspace-tab.active {
+  border-color: rgba(124, 199, 255, 0.5);
+  background: linear-gradient(180deg, rgba(76, 142, 223, 0.42), rgba(37, 74, 132, 0.5));
+}
+
+.workspace-tab.editing {
+  border-color: rgba(124, 199, 255, 0.62);
+}
+
+.workspace-tab-button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 7px 8px 7px 10px;
+}
+
+.workspace-tab-editor {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px 5px 10px;
+}
+
+.workspace-tab-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.workspace-tab-input {
+  width: 100%;
+  border: 1px solid var(--border-1);
+  border-radius: 7px;
+  background: rgba(8, 14, 25, 0.92);
+  color: var(--text-0);
+  padding: 4px 6px;
+  font-size: 0.81rem;
+}
+
+.workspace-tab-input:focus {
+  outline: none;
+  border-color: rgba(124, 199, 255, 0.68);
+}
+
+.workspace-tab-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  margin-right: 6px;
+  padding: 0;
+  background: rgba(9, 14, 24, 0.55);
+  color: var(--text-2);
+  font-size: 0.8rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-tab-close:hover {
+  background: rgba(240, 103, 103, 0.24);
+  color: #ffdede;
 }
 
 .top-panels {
@@ -613,6 +779,10 @@ button {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(16, 25, 43, 0.98);
 }
 
 .packages-table tbody tr {
@@ -1005,11 +1175,11 @@ button {
   }
 
   .main-content {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
 
   .main-content.console-collapsed {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
 
   .packages-toolbar {
