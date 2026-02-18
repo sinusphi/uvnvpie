@@ -3,6 +3,7 @@ dist/
 .vite/
 node_modules/
 src-tauri/target/
+.test_envs/
 
 .env*
 .DS_Store
