@@ -26,6 +26,16 @@ pub struct PackageItem {
     pub home_page: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UvCommandResult {
+    pub success: bool,
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+    pub command: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawPackageItem {
@@ -78,13 +88,103 @@ packages.sort(key=lambda item: item["name"].lower())
 print(json.dumps(packages))
 "#;
 
-pub fn uv_version() -> String {
-    match Command::new("uv").arg("--version").output() {
+pub fn uv_version(uv_binary_path: Option<String>) -> String {
+    let binary = match resolve_uv_binary(uv_binary_path) {
+        Ok(binary) => binary,
+        Err(_) => return "uv not found".to_string(),
+    };
+
+    match Command::new(&binary).arg("--version").output() {
         Ok(output) if output.status.success() => {
             String::from_utf8_lossy(&output.stdout).trim().to_string()
         }
         _ => "uv not found".to_string(),
     }
+}
+
+pub fn uv_add(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    requirement: String,
+    dev: bool,
+    optional_group: Option<String>,
+) -> Result<UvCommandResult, String> {
+    let requirement = required_text("Requirement", requirement)?;
+    let mut args = vec!["add".to_string()];
+
+    if dev {
+        args.push("--dev".to_string());
+    }
+
+    if let Some(group) = optional_group
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--optional".to_string());
+        args.push(group);
+    }
+
+    args.push(requirement);
+    run_uv_command(project_dir, uv_binary_path, args)
+}
+
+pub fn uv_lock(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    check_only: bool,
+) -> Result<UvCommandResult, String> {
+    let mut args = vec!["lock".to_string()];
+
+    if check_only {
+        args.push("--check".to_string());
+    }
+
+    run_uv_command(project_dir, uv_binary_path, args)
+}
+
+pub fn uv_sync(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    frozen: bool,
+    no_dev: bool,
+) -> Result<UvCommandResult, String> {
+    let mut args = vec!["sync".to_string()];
+
+    if frozen {
+        args.push("--frozen".to_string());
+    }
+
+    if no_dev {
+        args.push("--no-dev".to_string());
+    }
+
+    run_uv_command(project_dir, uv_binary_path, args)
+}
+
+pub fn uv_upgrade(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<UvCommandResult, String> {
+    let package_name = required_text("Package name", package_name)?;
+    let args = vec![
+        "lock".to_string(),
+        "--upgrade-package".to_string(),
+        package_name,
+    ];
+
+    run_uv_command(project_dir, uv_binary_path, args)
+}
+
+pub fn uv_uninstall(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<UvCommandResult, String> {
+    let package_name = required_text("Package name", package_name)?;
+    let args = vec!["remove".to_string(), package_name];
+
+    run_uv_command(project_dir, uv_binary_path, args)
 }
 
 pub fn list_environments(env_root_dir: Option<String>) -> Result<Vec<EnvironmentItem>, String> {
@@ -245,4 +345,109 @@ fn read_python_version(interpreter_path: &Path) -> String {
         }
         _ => "Python".to_string(),
     }
+}
+
+fn run_uv_command(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    args: Vec<String>,
+) -> Result<UvCommandResult, String> {
+    let project_path = validate_project_directory(project_dir)?;
+    let binary = resolve_uv_binary(uv_binary_path)?;
+    let command_preview = format_command_preview(&binary, &args, &project_path);
+
+    let output = Command::new(&binary)
+        .current_dir(&project_path)
+        .args(&args)
+        .output()
+        .map_err(|error| format!("Failed to run command {command_preview}: {error}"))?;
+
+    Ok(UvCommandResult {
+        success: output.status.success(),
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        command: command_preview,
+    })
+}
+
+fn validate_project_directory(project_dir: String) -> Result<PathBuf, String> {
+    let project_dir = project_dir.trim();
+    if project_dir.is_empty() {
+        return Err("Project directory is required.".to_string());
+    }
+
+    let project_path = PathBuf::from(project_dir);
+    if !project_path.is_dir() {
+        return Err(format!(
+            "Project directory does not exist or is not a directory: {}",
+            project_path.display()
+        ));
+    }
+
+    let pyproject_path = project_path.join("pyproject.toml");
+    if !pyproject_path.is_file() {
+        return Err(format!(
+            "No pyproject.toml found in project directory: {}",
+            project_path.display()
+        ));
+    }
+
+    Ok(project_path)
+}
+
+fn resolve_uv_binary(uv_binary_path: Option<String>) -> Result<String, String> {
+    let normalized = uv_binary_path
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    if let Some(binary_path) = normalized {
+        let path = PathBuf::from(&binary_path);
+        if !path.is_file() {
+            return Err(format!(
+                "Configured uv binary path does not exist or is not a file: {}",
+                path.display()
+            ));
+        }
+
+        return Ok(binary_path);
+    }
+
+    Ok("uv".to_string())
+}
+
+fn required_text(label: &str, value: String) -> Result<String, String> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return Err(format!("{label} is required."));
+    }
+
+    Ok(normalized.to_string())
+}
+
+fn format_command_preview(binary: &str, args: &[String], project_path: &Path) -> String {
+    let mut command_parts = Vec::with_capacity(args.len() + 1);
+    command_parts.push(shell_quote(binary));
+    command_parts.extend(args.iter().map(|value| shell_quote(value)));
+
+    format!(
+        "(cd {} && {})",
+        shell_quote(project_path.to_string_lossy().as_ref()),
+        command_parts.join(" ")
+    )
+}
+
+fn shell_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | ':' | '\\'))
+    {
+        return value.to_string();
+    }
+
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
