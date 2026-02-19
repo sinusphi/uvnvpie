@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { type CloseRequestedEvent, getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, message, open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AboutDialog from './components/AboutDialog';
@@ -13,6 +13,7 @@ import SettingsDialog from './components/SettingsDialog';
 import Sidebar from './components/Sidebar';
 import Tabs from './components/Tabs';
 import Titlebar from './components/Titlebar';
+import WorkspaceTabs from './components/WorkspaceTabs';
 import { fetchEnvironmentPackages, fetchEnvironments } from './state/backend';
 import { useI18n } from './state/i18n';
 import {
@@ -20,12 +21,24 @@ import {
   type AppSettings,
   initSettingsStore,
   loadAppSettings,
+  loadSavedWorkspaceTabs,
   persistAppSettings,
+  persistSavedWorkspaceTabs,
+  type SavedWorkspaceTab,
   type Language
 } from './state/store';
 import type { EnvironmentItem, PackageItem } from './types/domain';
 
 type MainTab = 'packages' | 'dependencyTree' | 'requirements';
+
+interface WorkspaceTabState {
+  id: string;
+  name: string;
+  envRootDir: string;
+  environments: EnvironmentItem[];
+  selectedEnvironmentId: string;
+  isExpanded: boolean;
+}
 
 const INITIAL_CONSOLE_LINES = [
   '[boot] ui initialized',
@@ -59,6 +72,17 @@ function timestamp(): string {
   });
 }
 
+function getFolderName(path: string): string {
+  const normalized = path.trim().replace(/[\\/]+$/, '');
+
+  if (!normalized) {
+    return '';
+  }
+
+  const parts = normalized.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? normalized;
+}
+
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsDraft, setSettingsDraft] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -68,12 +92,14 @@ export default function App() {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isSettingsReady, setIsSettingsReady] = useState(false);
 
-  const [environments, setEnvironments] = useState<EnvironmentItem[]>([]);
-  const [packagesByEnvironment, setPackagesByEnvironment] = useState<Record<string, PackageItem[]>>({});
+  const [workspaceTabs, setWorkspaceTabs] = useState<WorkspaceTabState[]>([]);
+  const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState('');
+  const [editingWorkspaceTabId, setEditingWorkspaceTabId] = useState<string | null>(null);
+  const [editingWorkspaceName, setEditingWorkspaceName] = useState('');
 
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
-  const [selectedPackageId, setSelectedPackageId] = useState('');
-  const [activeTab, setActiveTab] = useState<MainTab>('packages');
+  const [packagesByEnvironment, setPackagesByEnvironment] = useState<Record<string, PackageItem[]>>({});
+  const [selectedPackageIdByWorkspace, setSelectedPackageIdByWorkspace] = useState<Record<string, string>>({});
+  const [mainTabByWorkspace, setMainTabByWorkspace] = useState<Record<string, MainTab>>({});
 
   const [uvVersion, setUvVersion] = useState('...');
   const [consoleLines, setConsoleLines] = useState<string[]>(INITIAL_CONSOLE_LINES);
@@ -84,12 +110,142 @@ export default function App() {
 
   const timersRef = useRef<number[]>([]);
   const jobTokenRef = useRef(0);
+  const workspaceCounterRef = useRef(0);
+  const closePromptActiveRef = useRef(false);
+  const requestWindowCloseRef = useRef<() => Promise<void>>(async () => {});
+  const closeRequestedUnlistenRef = useRef<(() => void) | null>(null);
 
   const { t } = useI18n(language);
 
+  const createWorkspaceTab = (envRootDir: string, nameOverride = '', isExpanded = false): WorkspaceTabState => {
+    workspaceCounterRef.current += 1;
+
+    const folderName = getFolderName(envRootDir);
+    const normalizedName = nameOverride.trim();
+
+    return {
+      id: `workspace-${workspaceCounterRef.current}`,
+      name: normalizedName || folderName || t('folderFallbackName'),
+      envRootDir,
+      environments: [],
+      selectedEnvironmentId: '',
+      isExpanded
+    };
+  };
+
+  const appendConsole = (line: string) => {
+    setConsoleLines((previous) => [...previous, `[${timestamp()}] ${line}`]);
+  };
+
+  const clearTimers = () => {
+    for (const timer of timersRef.current) {
+      window.clearTimeout(timer);
+    }
+
+    timersRef.current = [];
+  };
+
+  const loadWorkspaceEnvironments = async (tabId: string, envRootDir: string) => {
+    const normalizedRootDir = envRootDir.trim();
+
+    if (!normalizedRootDir) {
+      setWorkspaceTabs((previous) =>
+        previous.map((tab) => {
+          if (tab.id !== tabId) {
+            return tab;
+          }
+
+          return {
+            ...tab,
+            environments: [],
+            selectedEnvironmentId: ''
+          };
+        })
+      );
+
+      setSelectedPackageIdByWorkspace((previous) => ({
+        ...previous,
+        [tabId]: ''
+      }));
+
+      return;
+    }
+
+    try {
+      const nextEnvironments = await fetchEnvironments(normalizedRootDir);
+
+      setWorkspaceTabs((previous) =>
+        previous.map((tab) => {
+          if (tab.id !== tabId) {
+            return tab;
+          }
+
+          const selectedEnvironmentId = nextEnvironments.some(
+            (environment) => environment.id === tab.selectedEnvironmentId
+          )
+            ? tab.selectedEnvironmentId
+            : nextEnvironments[0]?.id ?? '';
+
+          return {
+            ...tab,
+            environments: nextEnvironments,
+            selectedEnvironmentId
+          };
+        })
+      );
+
+      setSelectedPackageIdByWorkspace((previous) => ({
+        ...previous,
+        [tabId]: ''
+      }));
+
+      appendConsole(
+        `[data] loaded ${nextEnvironments.length} environment(s)${normalizedRootDir ? ` from ${normalizedRootDir}` : ''}`
+      );
+    } catch (error) {
+      console.error(error);
+
+      setWorkspaceTabs((previous) =>
+        previous.map((tab) => {
+          if (tab.id !== tabId) {
+            return tab;
+          }
+
+          return {
+            ...tab,
+            environments: [],
+            selectedEnvironmentId: ''
+          };
+        })
+      );
+
+      setSelectedPackageIdByWorkspace((previous) => ({
+        ...previous,
+        [tabId]: ''
+      }));
+
+      appendConsole('[error] failed to load environment list');
+      await showMessage('Failed to load environments.', 'uvnvpie');
+    }
+  };
+
+  const activeWorkspace = useMemo(() => {
+    if (!activeWorkspaceTabId) {
+      return workspaceTabs[0] ?? null;
+    }
+
+    return workspaceTabs.find((tab) => tab.id === activeWorkspaceTabId) ?? workspaceTabs[0] ?? null;
+  }, [workspaceTabs, activeWorkspaceTabId]);
+
   const selectedEnvironment = useMemo(() => {
-    return environments.find((environment) => environment.id === selectedEnvironmentId) ?? null;
-  }, [environments, selectedEnvironmentId]);
+    if (!activeWorkspace) {
+      return null;
+    }
+
+    return (
+      activeWorkspace.environments.find((environment) => environment.id === activeWorkspace.selectedEnvironmentId) ?? null
+    );
+  }, [activeWorkspace]);
 
   const fallbackEnvironment = useMemo<EnvironmentItem>(() => {
     return {
@@ -111,6 +267,22 @@ export default function App() {
     return packagesByEnvironment[selectedEnvironment.id] ?? [];
   }, [packagesByEnvironment, selectedEnvironment]);
 
+  const activeMainTab = useMemo<MainTab>(() => {
+    if (!activeWorkspace?.id) {
+      return 'packages';
+    }
+
+    return mainTabByWorkspace[activeWorkspace.id] ?? 'packages';
+  }, [activeWorkspace, mainTabByWorkspace]);
+
+  const selectedPackageId = useMemo(() => {
+    if (!activeWorkspace?.id) {
+      return '';
+    }
+
+    return selectedPackageIdByWorkspace[activeWorkspace.id] ?? '';
+  }, [activeWorkspace, selectedPackageIdByWorkspace]);
+
   const selectedPackage = useMemo(() => {
     return packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
   }, [packages, selectedPackageId]);
@@ -128,17 +300,60 @@ export default function App() {
     return JSON.stringify(settings) !== JSON.stringify(settingsDraft);
   }, [settings, settingsDraft]);
 
-  const appendConsole = (line: string) => {
-    setConsoleLines((previous) => [...previous, `[${timestamp()}] ${line}`]);
+  const collectWorkspaceTabsForPersistence = (): SavedWorkspaceTab[] => {
+    const unique = new Set<string>();
+
+    return workspaceTabs
+      .map((tab) => ({
+        envRootDir: tab.envRootDir.trim(),
+        name: tab.name.trim(),
+        isExpanded: tab.isExpanded
+      }))
+      .filter((tab) => {
+        if (!tab.envRootDir || unique.has(tab.envRootDir)) {
+          return false;
+        }
+
+        unique.add(tab.envRootDir);
+        return true;
+      });
   };
 
-  const clearTimers = () => {
-    for (const timer of timersRef.current) {
-      window.clearTimeout(timer);
+  const closeWindowNow = async () => {
+    const appWindow = getCurrentWindow();
+    if (closeRequestedUnlistenRef.current) {
+      closeRequestedUnlistenRef.current();
+      closeRequestedUnlistenRef.current = null;
     }
 
-    timersRef.current = [];
+    await appWindow.close();
   };
+
+  const requestWindowClose = async () => {
+    if (closePromptActiveRef.current) {
+      return;
+    }
+
+    closePromptActiveRef.current = true;
+
+    try {
+      if (settings.alwaysSaveTabs) {
+        const tabsToPersist = collectWorkspaceTabsForPersistence();
+        await persistSavedWorkspaceTabs(tabsToPersist);
+      } else {
+        await persistSavedWorkspaceTabs([]);
+      }
+
+      await closeWindowNow();
+    } catch (error) {
+      console.error('window close request failed', error);
+      await closeWindowNow();
+    } finally {
+      closePromptActiveRef.current = false;
+    }
+  };
+
+  requestWindowCloseRef.current = requestWindowClose;
 
   const startMockJob = (label: string) => {
     if (isJobRunning) {
@@ -196,7 +411,7 @@ export default function App() {
       }
 
       if (action === 'close') {
-        await appWindow.close();
+        await requestWindowClose();
       }
     } catch (error) {
       console.error('window action failed', action, error);
@@ -283,16 +498,264 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (packages.length === 0) {
-      setSelectedPackageId('');
+  const openWorkspaceTab = async () => {
+    try {
+      const selection = await open({
+        title: t('pickWorkspaceFolderTitle'),
+        directory: true,
+        multiple: true
+      });
+
+      const selectedFolders = (Array.isArray(selection) ? selection : [selection])
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+      const uniqueFolders = Array.from(new Set(selectedFolders));
+
+      if (uniqueFolders.length === 0) {
+        return;
+      }
+
+      const existingByRootDir = new Map(workspaceTabs.map((tab) => [tab.envRootDir, tab]));
+      const expandedExistingIds = new Set<string>();
+      const newTabs: WorkspaceTabState[] = [];
+      let nextActiveTabId = '';
+
+      for (const envRootDir of uniqueFolders) {
+        const existingTab = existingByRootDir.get(envRootDir);
+
+        if (existingTab) {
+          expandedExistingIds.add(existingTab.id);
+          nextActiveTabId = existingTab.id;
+          continue;
+        }
+
+        const shouldExpandByDefault = workspaceTabs.length === 0 && newTabs.length === 0;
+        const nextTab = createWorkspaceTab(envRootDir, '', shouldExpandByDefault);
+        newTabs.push(nextTab);
+        existingByRootDir.set(envRootDir, nextTab);
+        nextActiveTabId = nextTab.id;
+      }
+
+      if (expandedExistingIds.size > 0) {
+        setWorkspaceTabs((previous) =>
+          previous.map((tab) => {
+            if (!expandedExistingIds.has(tab.id)) {
+              return tab;
+            }
+
+            return {
+              ...tab,
+              isExpanded: true
+            };
+          })
+        );
+
+      }
+
+      if (newTabs.length > 0) {
+        setWorkspaceTabs((previous) => [...previous, ...newTabs]);
+        setMainTabByWorkspace((previous) => ({
+          ...previous,
+          ...Object.fromEntries(newTabs.map((tab) => [tab.id, 'packages'] as const))
+        }));
+        setSelectedPackageIdByWorkspace((previous) => ({
+          ...previous,
+          ...Object.fromEntries(newTabs.map((tab) => [tab.id, ''] as const))
+        }));
+
+        for (const tab of newTabs) {
+          void loadWorkspaceEnvironments(tab.id, tab.envRootDir);
+        }
+      }
+
+      if (nextActiveTabId) {
+        setActiveWorkspaceTabId(nextActiveTabId);
+      }
+    } catch (error) {
+      console.error(error);
+      await showMessage(t('settingsLoadFailed'), t('dialogErrorTitle'));
+    }
+  };
+
+  const handleSelectWorkspace = (workspaceId: string) => {
+    setActiveWorkspaceTabId(workspaceId);
+  };
+
+  const handleToggleWorkspaceExpanded = (workspaceId: string) => {
+    setWorkspaceTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.id !== workspaceId) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          isExpanded: !tab.isExpanded
+        };
+      })
+    );
+  };
+
+  const handleSelectEnvironment = (workspaceId: string, environmentId: string) => {
+    setActiveWorkspaceTabId(workspaceId);
+    setWorkspaceTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.id !== workspaceId) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          selectedEnvironmentId: environmentId,
+          isExpanded: true
+        };
+      })
+    );
+  };
+
+  const handleMainTabChange = (tab: MainTab) => {
+    if (!activeWorkspace?.id) {
       return;
     }
 
-    if (!packages.some((pkg) => pkg.id === selectedPackageId)) {
-      setSelectedPackageId(packages[0].id);
+    setMainTabByWorkspace((previous) => ({
+      ...previous,
+      [activeWorkspace.id]: tab
+    }));
+  };
+
+  const handleSelectPackage = (packageId: string) => {
+    if (!activeWorkspace?.id) {
+      return;
     }
-  }, [packages, selectedPackageId]);
+
+    setSelectedPackageIdByWorkspace((previous) => ({
+      ...previous,
+      [activeWorkspace.id]: packageId
+    }));
+  };
+
+  const startWorkspaceRename = (workspaceId: string) => {
+    const target = workspaceTabs.find((tab) => tab.id === workspaceId);
+
+    if (!target) {
+      return;
+    }
+
+    setEditingWorkspaceTabId(workspaceId);
+    setEditingWorkspaceName(target.name);
+  };
+
+  const cancelWorkspaceRename = () => {
+    setEditingWorkspaceTabId(null);
+    setEditingWorkspaceName('');
+  };
+
+  const commitWorkspaceRename = () => {
+    if (!editingWorkspaceTabId) {
+      return;
+    }
+
+    const nextLabel = editingWorkspaceName.trim();
+    const editingId = editingWorkspaceTabId;
+
+    setWorkspaceTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.id !== editingId) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          name: nextLabel || getFolderName(tab.envRootDir) || t('folderFallbackName')
+        };
+      })
+    );
+
+    setEditingWorkspaceTabId(null);
+    setEditingWorkspaceName('');
+  };
+
+  const closeWorkspaceTab = (workspaceId: string) => {
+    const targetIndex = workspaceTabs.findIndex((tab) => tab.id === workspaceId);
+
+    if (targetIndex < 0) {
+      return;
+    }
+
+    const nextTabs = workspaceTabs.filter((tab) => tab.id !== workspaceId);
+    setWorkspaceTabs(nextTabs);
+
+    if (activeWorkspaceTabId === workspaceId) {
+      const neighborTab = workspaceTabs[targetIndex + 1] ?? workspaceTabs[targetIndex - 1] ?? nextTabs[0];
+      setActiveWorkspaceTabId(neighborTab?.id ?? '');
+    }
+
+    setMainTabByWorkspace((previous) => {
+      if (!(workspaceId in previous)) {
+        return previous;
+      }
+
+      const { [workspaceId]: _removedMainTab, ...rest } = previous;
+      return rest;
+    });
+
+    setSelectedPackageIdByWorkspace((previous) => {
+      if (!(workspaceId in previous)) {
+        return previous;
+      }
+
+      const { [workspaceId]: _removedPackageId, ...rest } = previous;
+      return rest;
+    });
+
+    if (editingWorkspaceTabId === workspaceId) {
+      setEditingWorkspaceTabId(null);
+      setEditingWorkspaceName('');
+    }
+  };
+
+  useEffect(() => {
+    if (!activeWorkspaceTabId && workspaceTabs.length > 0) {
+      setActiveWorkspaceTabId(workspaceTabs[0].id);
+      return;
+    }
+
+    if (activeWorkspaceTabId && !workspaceTabs.some((tab) => tab.id === activeWorkspaceTabId)) {
+      setActiveWorkspaceTabId(workspaceTabs[0]?.id ?? '');
+    }
+  }, [activeWorkspaceTabId, workspaceTabs]);
+
+  useEffect(() => {
+    if (!activeWorkspace?.id) {
+      return;
+    }
+
+    setSelectedPackageIdByWorkspace((previous) => {
+      const currentPackageId = previous[activeWorkspace.id] ?? '';
+
+      if (packages.length === 0) {
+        if (!currentPackageId) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          [activeWorkspace.id]: ''
+        };
+      }
+
+      if (packages.some((pkg) => pkg.id === currentPackageId)) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [activeWorkspace.id]: packages[0].id
+      };
+    });
+  }, [activeWorkspace, packages]);
 
   useEffect(() => {
     let alive = true;
@@ -333,50 +796,62 @@ export default function App() {
 
     let alive = true;
 
-    const loadEnvironmentList = async () => {
+    const resetWorkspaceState = () => {
+      setWorkspaceTabs([]);
+      setActiveWorkspaceTabId('');
+      setMainTabByWorkspace({});
+      setSelectedPackageIdByWorkspace({});
+      setPackagesByEnvironment({});
+      setEditingWorkspaceTabId(null);
+      setEditingWorkspaceName('');
+    };
+
+    const restoreSavedTabs = async () => {
       try {
-        const nextEnvironments = await fetchEnvironments(settings.envRootDir);
+        const savedTabs = await loadSavedWorkspaceTabs();
 
         if (!alive) {
           return;
         }
 
-        setEnvironments(nextEnvironments);
-        setPackagesByEnvironment({});
-        setSelectedPackageId('');
-        setSelectedEnvironmentId((current) => {
-          if (nextEnvironments.some((environment) => environment.id === current)) {
-            return current;
-          }
+        if (savedTabs.length === 0) {
+          resetWorkspaceState();
+          return;
+        }
 
-          return nextEnvironments[0]?.id ?? '';
-        });
+        const restoredTabs = savedTabs.map((tab) => createWorkspaceTab(tab.envRootDir, tab.name, tab.isExpanded));
 
-        appendConsole(
-          `[data] loaded ${nextEnvironments.length} environment(s)${settings.envRootDir ? ` from ${settings.envRootDir}` : ''}`
+        setWorkspaceTabs(restoredTabs);
+        setActiveWorkspaceTabId(restoredTabs[0]?.id ?? '');
+        setMainTabByWorkspace(
+          Object.fromEntries(restoredTabs.map((tab) => [tab.id, 'packages'] as const)) as Record<string, MainTab>
         );
+        setSelectedPackageIdByWorkspace(
+          Object.fromEntries(restoredTabs.map((tab) => [tab.id, ''] as const)) as Record<string, string>
+        );
+        setPackagesByEnvironment({});
+        setEditingWorkspaceTabId(null);
+        setEditingWorkspaceName('');
+
+        for (const tab of restoredTabs) {
+          void loadWorkspaceEnvironments(tab.id, tab.envRootDir);
+        }
       } catch (error) {
         console.error(error);
+        await showMessage('Failed to load settings.', 'uvnvpie');
 
-        if (!alive) {
-          return;
+        if (alive) {
+          resetWorkspaceState();
         }
-
-        setEnvironments([]);
-        setPackagesByEnvironment({});
-        setSelectedEnvironmentId('');
-        setSelectedPackageId('');
-        appendConsole('[error] failed to load environment list');
-        await showMessage('Failed to load environments.', 'uvnvpie');
       }
     };
 
-    void loadEnvironmentList();
+    void restoreSavedTabs();
 
     return () => {
       alive = false;
     };
-  }, [isSettingsReady, settings.envRootDir]);
+  }, [isSettingsReady]);
 
   useEffect(() => {
     if (!selectedEnvironment) {
@@ -497,6 +972,11 @@ export default function App() {
         void syncState();
       })
       .then((unlisten) => {
+        if (!active) {
+          unlisten();
+          return;
+        }
+
         unlistenResized = unlisten;
       })
       .catch((error) => {
@@ -508,6 +988,42 @@ export default function App() {
 
       if (unlistenResized) {
         unlistenResized();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    let unlistenCloseRequested: (() => void) | null = null;
+    let active = true;
+
+    void appWindow
+      .onCloseRequested(async (event: CloseRequestedEvent) => {
+        event.preventDefault();
+        await requestWindowCloseRef.current();
+      })
+      .then((unlisten) => {
+        if (!active) {
+          unlisten();
+          return;
+        }
+
+        unlistenCloseRequested = unlisten;
+        closeRequestedUnlistenRef.current = unlisten;
+      })
+      .catch((error) => {
+        console.error('window close listener registration failed', error);
+      });
+
+    return () => {
+      active = false;
+
+      if (unlistenCloseRequested) {
+        unlistenCloseRequested();
+      }
+
+      if (closeRequestedUnlistenRef.current === unlistenCloseRequested) {
+        closeRequestedUnlistenRef.current = null;
       }
     };
   }, []);
@@ -539,6 +1055,7 @@ export default function App() {
         <div className="app-window">
           <Titlebar
             title={t('appTitle')}
+            isTaskRunning={isJobRunning}
             onOpenSettings={openSettings}
             onOpenAbout={() => setIsAboutOpen(true)}
             onMinimize={() => void runWindowAction('minimize')}
@@ -549,10 +1066,13 @@ export default function App() {
 
           <div className="main-layout">
             <Sidebar
-              environments={environments}
-              selectedEnvironmentId={selectedEnvironmentId}
-              onSelectEnvironment={setSelectedEnvironmentId}
+              workspaces={workspaceTabs}
+              activeWorkspaceId={activeWorkspace?.id ?? ''}
+              onSelectWorkspace={handleSelectWorkspace}
+              onToggleWorkspaceExpanded={handleToggleWorkspaceExpanded}
+              onSelectEnvironment={handleSelectEnvironment}
               onCreateEnvironment={() => appendConsole(t('createEnvironmentPending'))}
+              onOpenWorkspace={() => void openWorkspaceTab()}
               t={t}
             />
 
@@ -562,11 +1082,25 @@ export default function App() {
                 <InterpreterCard pythonVersion={displayedEnvironment.pythonVersion} uvVersion={uvVersion} t={t} />
               </section>
 
+              <WorkspaceTabs
+                tabs={workspaceTabs.map((tab) => ({ id: tab.id, label: tab.name }))}
+                activeTabId={activeWorkspace?.id ?? ''}
+                editingTabId={editingWorkspaceTabId}
+                editValue={editingWorkspaceName}
+                closeLabel={t('close')}
+                onSelectTab={handleSelectWorkspace}
+                onStartEditTab={startWorkspaceRename}
+                onEditValueChange={setEditingWorkspaceName}
+                onCommitEdit={commitWorkspaceRename}
+                onCancelEdit={cancelWorkspaceRename}
+                onCloseTab={closeWorkspaceTab}
+              />
+
               <section className="tab-content-stack">
                 <section className="packages-section">
                   <div className="packages-toolbar">
-                    <Tabs tabs={tabs} activeTab={activeTab} onChangeTab={setActiveTab} />
-                    {activeTab === 'packages' ? (
+                    <Tabs tabs={tabs} activeTab={activeMainTab} onChangeTab={handleMainTabChange} />
+                    {activeMainTab === 'packages' ? (
                       <div className="packages-actions">
                         <button
                           type="button"
@@ -588,21 +1122,21 @@ export default function App() {
                     ) : null}
                   </div>
 
-                  {activeTab === 'packages' ? (
+                  {activeMainTab === 'packages' ? (
                     <PackagesTable
                       packages={packages}
                       selectedPackageId={selectedPackage?.id ?? ''}
-                      onSelectPackage={setSelectedPackageId}
+                      onSelectPackage={handleSelectPackage}
                       t={t}
                     />
                   ) : (
                     <div className="packages-placeholder">
-                      <p>{activeTab === 'dependencyTree' ? t('dependencyTreePlaceholder') : t('requirementsPlaceholder')}</p>
+                      <p>{activeMainTab === 'dependencyTree' ? t('dependencyTreePlaceholder') : t('requirementsPlaceholder')}</p>
                     </div>
                   )}
                 </section>
 
-                {activeTab === 'packages' ? (
+                {activeMainTab === 'packages' ? (
                   <section className="bottom-panels">
                     <DetailsPanel packageItem={selectedPackage} t={t} />
                     <ActionsPanel

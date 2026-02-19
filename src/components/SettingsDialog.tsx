@@ -58,6 +58,13 @@ export default function SettingsDialog({
     });
   };
 
+  const onAlwaysSaveTabsChange = (checked: boolean) => {
+    onChange({
+      ...draft,
+      alwaysSaveTabs: checked
+    });
+  };
+
   return (
     <div className="dialog-backdrop" role="presentation" onClick={onCancel}>
       <section
@@ -121,6 +128,17 @@ export default function SettingsDialog({
               value={draft.autoSaveDebounceMs}
               onChange={(event) => onDebounceChange(event.target.value)}
             />
+          </label>
+
+          <label className="field-row checkbox-field-row">
+            <span className="checkbox-inline">
+              <input
+                type="checkbox"
+                checked={draft.alwaysSaveTabs}
+                onChange={(event) => onAlwaysSaveTabsChange(event.target.checked)}
+              />
+              <span>{t('alwaysSaveTabs')}</span>
+            </span>
           </label>
         </div>
 

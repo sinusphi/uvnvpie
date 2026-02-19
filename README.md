@@ -15,8 +15,7 @@ EN | [DE](README.de.md)
 [![Tailwind: 3.4.14](https://img.shields.io/badge/Tailwind-3.4.14-orange?logo=tailwindcss&logoColor=cyan)](https://tailwindcss.com) 
 [![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou) 
 
-uvnvpie is a desktop application built with Tauri v2, React, and Rust.  
-The app scans local Python environments, reads installed packages per interpreter, and provides a solid UI foundation for future `uv` actions.
+Next-gen virtual environment manager for Python. Built with Rust + Tauri and leveraging uv for ultra-fast dependency handling. Designed for developers who want the best performance and full control.
 
 ## Project Status
 

@@ -2,29 +2,39 @@ import { LazyStore } from '@tauri-apps/plugin-store';
 
 export type Language = 'de' | 'en';
 
+export interface SavedWorkspaceTab {
+  envRootDir: string;
+  name: string;
+  isExpanded: boolean;
+}
+
 export interface AppSettings {
   language: Language;
   envRootDir: string;
   uvBinaryPath: string;
   autoSaveDebounceMs: number;
+  alwaysSaveTabs: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'de',
   envRootDir: '',
   uvBinaryPath: '',
-  autoSaveDebounceMs: 200
+  autoSaveDebounceMs: 200,
+  alwaysSaveTabs: true
 };
 
 const SETTINGS_FILE = 'settings.json';
 const settingsStore = new LazyStore(SETTINGS_FILE);
 let initialized = false;
+const SAVED_WORKSPACE_TABS_KEY = 'savedWorkspaceTabs';
 
 const SETTING_KEYS: Array<keyof AppSettings> = [
   'language',
   'envRootDir',
   'uvBinaryPath',
-  'autoSaveDebounceMs'
+  'autoSaveDebounceMs',
+  'alwaysSaveTabs'
 ];
 
 function toLanguage(value: unknown): Language {
@@ -43,12 +53,48 @@ function toDebounce(value: unknown): number {
   return Math.max(0, Math.floor(value));
 }
 
+function toBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function normalizeSavedWorkspaceTabs(value: unknown): SavedWorkspaceTab[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const unique = new Set<string>();
+  const tabs: SavedWorkspaceTab[] = [];
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    const record = entry as Record<string, unknown>;
+    const envRootDir = toStringValue(record.envRootDir).trim();
+
+    if (!envRootDir || unique.has(envRootDir)) {
+      continue;
+    }
+
+    unique.add(envRootDir);
+    tabs.push({
+      envRootDir,
+      name: toStringValue(record.name),
+      isExpanded: toBoolean(record.isExpanded, tabs.length === 0)
+    });
+  }
+
+  return tabs;
+}
+
 function normalizeSettings(raw: Partial<Record<keyof AppSettings, unknown>>): AppSettings {
   return {
     language: toLanguage(raw.language),
     envRootDir: toStringValue(raw.envRootDir),
     uvBinaryPath: toStringValue(raw.uvBinaryPath),
-    autoSaveDebounceMs: toDebounce(raw.autoSaveDebounceMs)
+    autoSaveDebounceMs: toDebounce(raw.autoSaveDebounceMs),
+    alwaysSaveTabs: toBoolean(raw.alwaysSaveTabs, DEFAULT_SETTINGS.alwaysSaveTabs)
   };
 }
 
@@ -59,6 +105,8 @@ export async function initSettingsStore(): Promise<void> {
 
   const current = await loadAppSettings(false);
   await persistAppSettings(current, false);
+  const savedTabs = await loadSavedWorkspaceTabs(false);
+  await persistSavedWorkspaceTabs(savedTabs, false);
   initialized = true;
 }
 
@@ -90,5 +138,24 @@ export async function persistAppSettings(settings: AppSettings, callInit = true)
     await settingsStore.set(key, normalized[key]);
   }
 
+  await settingsStore.save();
+}
+
+export async function loadSavedWorkspaceTabs(callInit = true): Promise<SavedWorkspaceTab[]> {
+  if (callInit && !initialized) {
+    await initSettingsStore();
+  }
+
+  const raw = await settingsStore.get<unknown>(SAVED_WORKSPACE_TABS_KEY);
+  return normalizeSavedWorkspaceTabs(raw);
+}
+
+export async function persistSavedWorkspaceTabs(tabs: SavedWorkspaceTab[], callInit = true): Promise<void> {
+  if (callInit && !initialized) {
+    await initSettingsStore();
+  }
+
+  const normalized = normalizeSavedWorkspaceTabs(tabs);
+  await settingsStore.set(SAVED_WORKSPACE_TABS_KEY, normalized);
   await settingsStore.save();
 }
