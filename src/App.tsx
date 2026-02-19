@@ -14,7 +14,15 @@ import Sidebar from './components/Sidebar';
 import Tabs from './components/Tabs';
 import Titlebar from './components/Titlebar';
 import WorkspaceTabs from './components/WorkspaceTabs';
-import { fetchEnvironmentPackages, fetchEnvironments } from './state/backend';
+import {
+  fetchEnvironmentPackages,
+  fetchEnvironments,
+  runUvAdd,
+  runUvLock,
+  runUvSync,
+  runUvUninstall,
+  runUvUpgrade
+} from './state/backend';
 import { useI18n } from './state/i18n';
 import {
   DEFAULT_SETTINGS,
@@ -27,7 +35,7 @@ import {
   type SavedWorkspaceTab,
   type Language
 } from './state/store';
-import type { EnvironmentItem, PackageItem } from './types/domain';
+import type { EnvironmentItem, PackageItem, UvCommandResult } from './types/domain';
 
 type MainTab = 'packages' | 'dependencyTree' | 'requirements';
 
@@ -263,6 +271,11 @@ export default function App() {
   const selectedPackage = useMemo(() => {
     return packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
   }, [packages, selectedPackageId]);
+
+  const activeProjectDir = (activeWorkspace?.envRootDir ?? '').trim();
+  const normalizedUvBinaryPath = settings.uvBinaryPath.trim();
+  const toolbarProjectActionsDisabled = isJobRunning || !activeProjectDir;
+  const toolbarPackageActionsDisabled = toolbarProjectActionsDisabled || !selectedPackage;
 
   const tabs = useMemo(
     () => [
@@ -613,6 +626,237 @@ export default function App() {
     }));
   };
 
+  const appendCommandOutput = (channel: 'stdout' | 'stderr', output: string) => {
+    const lines = output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    for (const line of lines) {
+      appendConsole(`[${channel}] ${line}`);
+    }
+  };
+
+  const appendUvCommandResult = (result: UvCommandResult) => {
+    appendConsole(`[cmd] ${result.command}`);
+    appendCommandOutput('stdout', result.stdout);
+    appendCommandOutput('stderr', result.stderr);
+    appendConsole(
+      result.success
+        ? `[done] command exited with code ${result.exitCode}`
+        : `[error] command exited with code ${result.exitCode}`
+    );
+  };
+
+  const refreshSelectedEnvironmentPackages = async () => {
+    if (!selectedEnvironment) {
+      return;
+    }
+
+    const nextPackages = await fetchEnvironmentPackages(selectedEnvironment.interpreterPath);
+    setPackagesByEnvironment((previous) => ({
+      ...previous,
+      [selectedEnvironment.id]: nextPackages
+    }));
+    appendConsole(`[data] loaded ${nextPackages.length} package(s) for ${selectedEnvironment.name}`);
+  };
+
+  const runProjectAction = async (
+    actionLabel: string,
+    steps: Array<{ label: string; run: () => Promise<UvCommandResult> }>,
+    options: { refreshPackages?: boolean } = {}
+  ) => {
+    if (toolbarProjectActionsDisabled) {
+      return;
+    }
+
+    setIsJobRunning(true);
+    appendConsole(`[job] ${actionLabel}`);
+
+    try {
+      for (const step of steps) {
+        appendConsole(`[step] ${step.label}`);
+        const result = await step.run();
+        appendUvCommandResult(result);
+
+        if (!result.success) {
+          throw new Error(result.stderr || `Command failed with exit code ${result.exitCode}.`);
+        }
+      }
+
+      if (options.refreshPackages) {
+        await refreshSelectedEnvironmentPackages();
+      }
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error || 'Unknown command error');
+      appendConsole(`[error] ${actionLabel} failed: ${messageText}`);
+      await showMessage(messageText, 'uvnvpie');
+    } finally {
+      setIsJobRunning(false);
+    }
+  };
+
+  const promptRequirement = async (actionLabel: string): Promise<string | null> => {
+    const input = window.prompt(`${actionLabel}\n\nRequirement (e.g. requests, httpx>=0.28):`, '');
+    if (input === null) {
+      return null;
+    }
+
+    const requirement = input.trim();
+    if (!requirement) {
+      await showMessage('Please enter a package requirement.', 'uvnvpie');
+      return null;
+    }
+
+    return requirement;
+  };
+
+  const handleInstallPackage = async () => {
+    if (toolbarProjectActionsDisabled) {
+      return;
+    }
+
+    const requirement = await promptRequirement('Install Package');
+    if (!requirement) {
+      return;
+    }
+
+    await runProjectAction('Install Package', [
+      {
+        label: `uv add ${requirement}`,
+        run: () =>
+          runUvAdd(activeProjectDir, requirement, {
+            uvBinaryPath: normalizedUvBinaryPath
+          })
+      }
+    ], { refreshPackages: true });
+  };
+
+  const handleUpgradePackage = async () => {
+    if (toolbarPackageActionsDisabled || !selectedPackage) {
+      return;
+    }
+
+    const packageName = selectedPackage.name;
+    await runProjectAction(
+      `Upgrade Package ${packageName}`,
+      [
+        {
+          label: `uv lock --upgrade-package ${packageName}`,
+          run: () =>
+            runUvUpgrade(activeProjectDir, packageName, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        },
+        {
+          label: 'uv sync',
+          run: () =>
+            runUvSync(activeProjectDir, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        }
+      ],
+      { refreshPackages: true }
+    );
+  };
+
+  const handleUninstallPackage = async () => {
+    if (toolbarPackageActionsDisabled || !selectedPackage) {
+      return;
+    }
+
+    const packageName = selectedPackage.name;
+    await runProjectAction(
+      `Uninstall Package ${packageName}`,
+      [
+        {
+          label: `uv remove ${packageName}`,
+          run: () =>
+            runUvUninstall(activeProjectDir, packageName, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        }
+      ],
+      { refreshPackages: true }
+    );
+  };
+
+  const handleUpdateAll = async () => {
+    await runProjectAction(
+      'Update All',
+      [
+        {
+          label: 'uv lock',
+          run: () =>
+            runUvLock(activeProjectDir, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        },
+        {
+          label: 'uv sync',
+          run: () =>
+            runUvSync(activeProjectDir, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        }
+      ],
+      { refreshPackages: true }
+    );
+  };
+
+  const handleAdd = async () => {
+    if (toolbarProjectActionsDisabled) {
+      return;
+    }
+
+    const requirement = await promptRequirement('Add');
+    if (!requirement) {
+      return;
+    }
+
+    await runProjectAction(
+      `Add ${requirement}`,
+      [
+        {
+          label: `uv add ${requirement}`,
+          run: () =>
+            runUvAdd(activeProjectDir, requirement, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        }
+      ],
+      { refreshPackages: true }
+    );
+  };
+
+  const handleLock = async () => {
+    await runProjectAction('Lock', [
+      {
+        label: 'uv lock',
+        run: () =>
+          runUvLock(activeProjectDir, {
+            uvBinaryPath: normalizedUvBinaryPath
+          })
+      }
+    ]);
+  };
+
+  const handleSync = async () => {
+    await runProjectAction(
+      'Sync',
+      [
+        {
+          label: 'uv sync',
+          run: () =>
+            runUvSync(activeProjectDir, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        }
+      ],
+      { refreshPackages: true }
+    );
+  };
+
   const startWorkspaceRename = (workspaceId: string) => {
     const target = workspaceTabs.find((tab) => tab.id === workspaceId);
 
@@ -895,7 +1139,9 @@ export default function App() {
 
     const loadUvVersion = async () => {
       try {
-        const version = await invoke<string>('get_uv_version');
+        const version = await invoke<string>('get_uv_version', {
+          uvBinaryPath: normalizedUvBinaryPath ? normalizedUvBinaryPath : null
+        });
 
         if (alive) {
           setUvVersion(version);
@@ -914,7 +1160,7 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [normalizedUvBinaryPath]);
 
   useEffect(() => {
     const handleFocus = () => {
@@ -1029,9 +1275,6 @@ export default function App() {
     };
   }, []);
 
-  const installPackageLabel = selectedPackage
-    ? `${t('installPackage')} ${selectedPackage.name}`
-    : t('installPackage');
   const installLabel = selectedPackage ? `${t('install')} ${selectedPackage.name}` : t('install');
   const upgradeLabel = selectedPackage ? `${t('upgrade')} ${selectedPackage.name}` : t('upgrade');
   const uninstallLabel = selectedPackage ? `${t('uninstall')} ${selectedPackage.name}` : t('uninstall');
@@ -1092,18 +1335,58 @@ export default function App() {
                         <button
                           type="button"
                           className="secondary-button"
-                          disabled={isJobRunning}
-                          onClick={() => startMockJob(installPackageLabel)}
+                          disabled={toolbarProjectActionsDisabled}
+                          onClick={() => void handleInstallPackage()}
                         >
-                          {t('installPackage')}
+                          Install Package
                         </button>
                         <button
                           type="button"
                           className="secondary-button"
-                          disabled={isJobRunning}
-                          onClick={() => startMockJob(t('updateAll'))}
+                          disabled={toolbarPackageActionsDisabled}
+                          onClick={() => void handleUpgradePackage()}
                         >
-                          {t('updateAll')}
+                          Upgrade Package
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={toolbarPackageActionsDisabled}
+                          onClick={() => void handleUninstallPackage()}
+                        >
+                          Uninstall Package
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={toolbarProjectActionsDisabled}
+                          onClick={() => void handleUpdateAll()}
+                        >
+                          Update All
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={toolbarProjectActionsDisabled}
+                          onClick={() => void handleAdd()}
+                        >
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={toolbarProjectActionsDisabled}
+                          onClick={() => void handleLock()}
+                        >
+                          Lock
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={toolbarProjectActionsDisabled}
+                          onClick={() => void handleSync()}
+                        >
+                          Sync
                         </button>
                       </div>
                     ) : null}
