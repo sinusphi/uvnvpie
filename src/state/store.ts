@@ -1,6 +1,7 @@
 import { LazyStore } from '@tauri-apps/plugin-store';
 
 export type Language = 'de' | 'en';
+export type OperationMode = 'project' | 'direct';
 
 export interface SavedWorkspaceTab {
   envRootDir: string;
@@ -10,6 +11,7 @@ export interface SavedWorkspaceTab {
 
 export interface AppSettings {
   language: Language;
+  operationMode: OperationMode;
   envRootDir: string;
   uvBinaryPath: string;
   autoSaveDebounceMs: number;
@@ -18,6 +20,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'de',
+  operationMode: 'project',
   envRootDir: '',
   uvBinaryPath: '',
   autoSaveDebounceMs: 200,
@@ -31,6 +34,7 @@ const SAVED_WORKSPACE_TABS_KEY = 'savedWorkspaceTabs';
 
 const SETTING_KEYS: Array<keyof AppSettings> = [
   'language',
+  'operationMode',
   'envRootDir',
   'uvBinaryPath',
   'autoSaveDebounceMs',
@@ -39,6 +43,10 @@ const SETTING_KEYS: Array<keyof AppSettings> = [
 
 function toLanguage(value: unknown): Language {
   return value === 'en' ? 'en' : 'de';
+}
+
+function toOperationMode(value: unknown): OperationMode {
+  return value === 'direct' ? 'direct' : 'project';
 }
 
 function toStringValue(value: unknown): string {
@@ -91,6 +99,7 @@ function normalizeSavedWorkspaceTabs(value: unknown): SavedWorkspaceTab[] {
 function normalizeSettings(raw: Partial<Record<keyof AppSettings, unknown>>): AppSettings {
   return {
     language: toLanguage(raw.language),
+    operationMode: toOperationMode(raw.operationMode),
     envRootDir: toStringValue(raw.envRootDir),
     uvBinaryPath: toStringValue(raw.uvBinaryPath),
     autoSaveDebounceMs: toDebounce(raw.autoSaveDebounceMs),
