@@ -1,8 +1,11 @@
 import type { I18nKey } from '../state/i18n';
+import type { OperationMode } from '../state/store';
 
 interface TitlebarProps {
   title: string;
   isTaskRunning: boolean;
+  operationMode: OperationMode;
+  onToggleOperationMode: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
   onMinimize: () => void;
@@ -30,6 +33,8 @@ function InfoIcon() {
 export default function Titlebar({
   title,
   isTaskRunning,
+  operationMode,
+  onToggleOperationMode,
   onOpenSettings,
   onOpenAbout,
   onMinimize,
@@ -37,8 +42,10 @@ export default function Titlebar({
   onClose,
   t
 }: TitlebarProps) {
+  void onToggleOperationMode;
+
   return (
-    <header className="titlebar" data-tauri-drag-region>
+    <header className="titlebar" data-operation-mode={operationMode} data-tauri-drag-region>
       <div className="titlebar-left" data-tauri-drag-region>
         <div className="brand-mark" aria-hidden="true">
           <span />
