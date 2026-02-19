@@ -15,3 +15,11 @@ export interface PackageItem {
   license: string;
   homePage: string;
 }
+
+export interface UvCommandResult {
+  success: boolean;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  command: string;
+}
