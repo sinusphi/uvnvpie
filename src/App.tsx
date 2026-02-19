@@ -148,29 +148,6 @@ export default function App() {
   const loadWorkspaceEnvironments = async (tabId: string, envRootDir: string) => {
     const normalizedRootDir = envRootDir.trim();
 
-    if (!normalizedRootDir) {
-      setWorkspaceTabs((previous) =>
-        previous.map((tab) => {
-          if (tab.id !== tabId) {
-            return tab;
-          }
-
-          return {
-            ...tab,
-            environments: [],
-            selectedEnvironmentId: ''
-          };
-        })
-      );
-
-      setSelectedPackageIdByWorkspace((previous) => ({
-        ...previous,
-        [tabId]: ''
-      }));
-
-      return;
-    }
-
     try {
       const nextEnvironments = await fetchEnvironments(normalizedRootDir);
 
@@ -815,7 +792,17 @@ export default function App() {
         }
 
         if (savedTabs.length === 0) {
-          resetWorkspaceState();
+          const initialTab = createWorkspaceTab(settings.envRootDir.trim(), '', true);
+
+          setWorkspaceTabs([initialTab]);
+          setActiveWorkspaceTabId(initialTab.id);
+          setMainTabByWorkspace({ [initialTab.id]: 'packages' });
+          setSelectedPackageIdByWorkspace({ [initialTab.id]: '' });
+          setPackagesByEnvironment({});
+          setEditingWorkspaceTabId(null);
+          setEditingWorkspaceName('');
+
+          void loadWorkspaceEnvironments(initialTab.id, initialTab.envRootDir);
           return;
         }
 
