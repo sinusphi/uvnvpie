@@ -10,8 +10,8 @@ use tauri::WebviewWindow;
 use tauri::{PhysicalPosition, PhysicalSize};
 
 #[tauri::command]
-fn get_uv_version() -> String {
-    uv::uv_version()
+fn get_uv_version(uv_binary_path: Option<String>) -> String {
+    uv::uv_version(uv_binary_path)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -22,6 +22,54 @@ fn list_environments(env_root_dir: Option<String>) -> Result<Vec<uv::Environment
 #[tauri::command(rename_all = "camelCase")]
 fn list_environment_packages(interpreter_path: String) -> Result<Vec<uv::PackageItem>, String> {
     uv::list_environment_packages(interpreter_path)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_add(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    requirement: String,
+    dev: bool,
+    optional_group: Option<String>,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_add(project_dir, uv_binary_path, requirement, dev, optional_group)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_lock(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    check_only: bool,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_lock(project_dir, uv_binary_path, check_only)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_sync(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    frozen: bool,
+    no_dev: bool,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_sync(project_dir, uv_binary_path, frozen, no_dev)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_upgrade(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_upgrade(project_dir, uv_binary_path, package_name)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_uninstall(
+    project_dir: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_uninstall(project_dir, uv_binary_path, package_name)
 }
 
 #[cfg(target_os = "linux")]
@@ -119,7 +167,12 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_uv_version,
             list_environments,
-            list_environment_packages
+            list_environment_packages,
+            uv_add,
+            uv_lock,
+            uv_sync,
+            uv_upgrade,
+            uv_uninstall
         ])
         .run(tauri::generate_context!())
         .expect("error while running uvnvpie");
