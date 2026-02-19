@@ -200,7 +200,7 @@ button {
 }
 
 .titlebar-task-glow {
-  --task-glow-length: 922px;
+  --task-glow-length: 1226px;
   position: absolute;
   top: 3.5px;
   left: calc(-1 * var(--task-glow-length));
@@ -209,11 +209,11 @@ button {
   border-radius: 999px;
   background: linear-gradient(
     90deg,
-    rgba(191, 236, 255, 0) 0%,
-    rgba(191, 236, 255, 0.32) 24%,
-    rgba(84, 170, 255, 0.52) 52%,
-    rgba(24, 86, 234, 0.34) 78%,
-    rgba(24, 86, 234, 0) 100%
+    rgba(170, 224, 255, 0) 0%,
+    rgba(170, 224, 255, 0.32) 24%,
+    rgba(58, 156, 255, 0.54) 52%,
+    rgba(12, 74, 255, 0.36) 78%,
+    rgba(12, 74, 255, 0) 100%
   );
   filter: blur(0.8px);
   opacity: 0.42;
@@ -230,12 +230,12 @@ button {
   border-radius: 999px;
   background: radial-gradient(
     ellipse at center,
-    rgba(184, 232, 255, 0.96) 0%,
-    rgba(112, 192, 255, 0.86) 34%,
-    rgba(54, 142, 255, 0.7) 52%,
-    rgba(19, 78, 228, 0.48) 68%,
-    rgba(19, 78, 228, 0.18) 80%,
-    rgba(19, 78, 228, 0) 90%
+    rgba(164, 220, 255, 0.96) 0%,
+    rgba(86, 176, 255, 0.88) 34%,
+    rgba(44, 132, 255, 0.72) 52%,
+    rgba(10, 66, 244, 0.5) 68%,
+    rgba(10, 66, 244, 0.2) 80%,
+    rgba(10, 66, 244, 0) 90%
   );
   filter: blur(5px);
   opacity: 0.96;
@@ -249,12 +249,12 @@ button {
   border-radius: 999px;
   background: radial-gradient(
     ellipse at center,
-    rgba(172, 224, 255, 0.72) 0%,
-    rgba(92, 178, 255, 0.6) 36%,
-    rgba(37, 126, 248, 0.44) 56%,
-    rgba(18, 72, 214, 0.3) 72%,
-    rgba(18, 72, 214, 0.12) 84%,
-    rgba(18, 72, 214, 0) 95%
+    rgba(154, 214, 255, 0.74) 0%,
+    rgba(72, 162, 255, 0.62) 36%,
+    rgba(30, 116, 252, 0.46) 56%,
+    rgba(10, 62, 228, 0.32) 72%,
+    rgba(10, 62, 228, 0.14) 84%,
+    rgba(10, 62, 228, 0) 95%
   );
   filter: blur(10px);
   opacity: 0.9;
@@ -262,7 +262,7 @@ button {
 }
 
 .titlebar-task-runway.is-active .titlebar-task-glow {
-  animation: titlebar-task-glow-cycle 5882ms linear infinite;
+  animation: titlebar-task-glow-cycle 1816ms linear infinite;
 }
 
 @keyframes titlebar-task-glow-cycle {
@@ -271,19 +271,9 @@ button {
     opacity: 1;
   }
 
-  59.2% {
+  100% {
     left: calc(100% + var(--task-glow-length));
     opacity: 1;
-  }
-
-  59.21% {
-    left: calc(-1 * var(--task-glow-length));
-    opacity: 0;
-  }
-
-  100% {
-    left: calc(-1 * var(--task-glow-length));
-    opacity: 0;
   }
 }
 
