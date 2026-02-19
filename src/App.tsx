@@ -874,6 +874,7 @@ export default function App() {
         <div className="app-window">
           <Titlebar
             title={t('appTitle')}
+            isTaskRunning={isJobRunning}
             onOpenSettings={openSettings}
             onOpenAbout={() => setIsAboutOpen(true)}
             onMinimize={() => void runWindowAction('minimize')}

@@ -2,6 +2,7 @@ import type { I18nKey } from '../state/i18n';
 
 interface TitlebarProps {
   title: string;
+  isTaskRunning: boolean;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
   onMinimize: () => void;
@@ -28,6 +29,7 @@ function InfoIcon() {
 
 export default function Titlebar({
   title,
+  isTaskRunning,
   onOpenSettings,
   onOpenAbout,
   onMinimize,
@@ -96,6 +98,10 @@ export default function Titlebar({
             <span className="close-mark" />
           </button>
         </div>
+      </div>
+
+      <div className={`titlebar-task-runway${isTaskRunning ? ' is-active' : ''}`} aria-hidden="true">
+        <span className="titlebar-task-glow" />
       </div>
     </header>
   );
