@@ -48,7 +48,7 @@ export default function Titlebar({
   const modeLabel = isProjectMode ? t('projectMode') : t('directMode');
 
   return (
-    <header className="titlebar" data-operation-mode={operationMode} data-tauri-drag-region>
+    <header className="titlebar" data-operation-mode={operationMode}>
       <div className="titlebar-left" data-tauri-drag-region>
         <div className="brand-mark" aria-hidden="true">
           <span />
@@ -69,6 +69,8 @@ export default function Titlebar({
           type="button"
           className={`titlebar-mode-btn${isProjectMode ? ' is-project' : ''}`}
           onClick={onToggleOperationMode}
+          aria-pressed={isProjectMode}
+          aria-label={isProjectMode ? t('switchToDirectMode') : t('switchToProjectMode')}
           disabled={isOperationModeDisabled}
         >
           {modeLabel}
