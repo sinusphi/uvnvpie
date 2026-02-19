@@ -32,6 +32,7 @@ import {
   loadSavedWorkspaceTabs,
   persistAppSettings,
   persistSavedWorkspaceTabs,
+  type OperationMode,
   type SavedWorkspaceTab,
   type Language
 } from './state/store';
@@ -89,6 +90,10 @@ function getFolderName(path: string): string {
 
   const parts = normalized.split(/[\\/]+/).filter(Boolean);
   return parts[parts.length - 1] ?? normalized;
+}
+
+function getNextOperationMode(mode: OperationMode): OperationMode {
+  return mode === 'project' ? 'direct' : 'project';
 }
 
 export default function App() {
@@ -412,6 +417,43 @@ export default function App() {
     setSettingsDraft(settings);
     setLanguage(settings.language);
     setIsSettingsOpen(true);
+  };
+
+  const toggleOperationMode = async () => {
+    if (isSettingsSaving || isJobRunning) {
+      return;
+    }
+
+    const previousMode = settings.operationMode;
+    const nextMode = getNextOperationMode(previousMode);
+
+    setSettings((previous) => ({
+      ...previous,
+      operationMode: nextMode
+    }));
+    setSettingsDraft((previous) => ({
+      ...previous,
+      operationMode: nextMode
+    }));
+
+    try {
+      await persistAppSettings({
+        ...settings,
+        operationMode: nextMode
+      });
+      appendConsole(`[mode] switched to ${nextMode}`);
+    } catch (error) {
+      console.error(error);
+      setSettings((previous) => ({
+        ...previous,
+        operationMode: previousMode
+      }));
+      setSettingsDraft((previous) => ({
+        ...previous,
+        operationMode: previousMode
+      }));
+      await showMessage(t('settingsSaveFailed'), t('dialogErrorTitle'));
+    }
   };
 
   const closeSettings = async () => {
@@ -1286,6 +1328,8 @@ export default function App() {
           <Titlebar
             title={t('appTitle')}
             isTaskRunning={isJobRunning}
+            operationMode={settings.operationMode}
+            onToggleOperationMode={() => void toggleOperationMode()}
             onOpenSettings={openSettings}
             onOpenAbout={() => setIsAboutOpen(true)}
             onMinimize={() => void runWindowAction('minimize')}
