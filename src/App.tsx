@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { type CloseRequestedEvent, getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, message, open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AboutDialog from './components/AboutDialog';
@@ -21,7 +21,10 @@ import {
   type AppSettings,
   initSettingsStore,
   loadAppSettings,
+  loadSavedWorkspaceTabs,
   persistAppSettings,
+  persistSavedWorkspaceTabs,
+  type SavedWorkspaceTab,
   type Language
 } from './state/store';
 import type { EnvironmentItem, PackageItem } from './types/domain';
@@ -108,17 +111,21 @@ export default function App() {
   const timersRef = useRef<number[]>([]);
   const jobTokenRef = useRef(0);
   const workspaceCounterRef = useRef(0);
+  const closePromptActiveRef = useRef(false);
+  const requestWindowCloseRef = useRef<() => Promise<void>>(async () => {});
+  const closeRequestedUnlistenRef = useRef<(() => void) | null>(null);
 
   const { t } = useI18n(language);
 
-  const createWorkspaceTab = (envRootDir: string): WorkspaceTabState => {
+  const createWorkspaceTab = (envRootDir: string, nameOverride = ''): WorkspaceTabState => {
     workspaceCounterRef.current += 1;
 
     const folderName = getFolderName(envRootDir);
+    const normalizedName = nameOverride.trim();
 
     return {
       id: `workspace-${workspaceCounterRef.current}`,
-      name: folderName || t('folderFallbackName'),
+      name: normalizedName || folderName || t('folderFallbackName'),
       envRootDir,
       environments: [],
       selectedEnvironmentId: '',
@@ -139,8 +146,33 @@ export default function App() {
   };
 
   const loadWorkspaceEnvironments = async (tabId: string, envRootDir: string) => {
+    const normalizedRootDir = envRootDir.trim();
+
+    if (!normalizedRootDir) {
+      setWorkspaceTabs((previous) =>
+        previous.map((tab) => {
+          if (tab.id !== tabId) {
+            return tab;
+          }
+
+          return {
+            ...tab,
+            environments: [],
+            selectedEnvironmentId: ''
+          };
+        })
+      );
+
+      setSelectedPackageIdByWorkspace((previous) => ({
+        ...previous,
+        [tabId]: ''
+      }));
+
+      return;
+    }
+
     try {
-      const nextEnvironments = await fetchEnvironments(envRootDir);
+      const nextEnvironments = await fetchEnvironments(normalizedRootDir);
 
       setWorkspaceTabs((previous) =>
         previous.map((tab) => {
@@ -168,7 +200,7 @@ export default function App() {
       }));
 
       appendConsole(
-        `[data] loaded ${nextEnvironments.length} environment(s)${envRootDir ? ` from ${envRootDir}` : ''}`
+        `[data] loaded ${nextEnvironments.length} environment(s)${normalizedRootDir ? ` from ${normalizedRootDir}` : ''}`
       );
     } catch (error) {
       console.error(error);
@@ -268,6 +300,60 @@ export default function App() {
     return JSON.stringify(settings) !== JSON.stringify(settingsDraft);
   }, [settings, settingsDraft]);
 
+  const collectWorkspaceTabsForPersistence = (): SavedWorkspaceTab[] => {
+    const unique = new Set<string>();
+
+    return workspaceTabs
+      .map((tab) => ({
+        envRootDir: tab.envRootDir.trim(),
+        name: tab.name.trim()
+      }))
+      .filter((tab) => {
+        if (!tab.envRootDir || unique.has(tab.envRootDir)) {
+          return false;
+        }
+
+        unique.add(tab.envRootDir);
+        return true;
+      });
+  };
+
+  const closeWindowNow = async () => {
+    const appWindow = getCurrentWindow();
+    if (closeRequestedUnlistenRef.current) {
+      closeRequestedUnlistenRef.current();
+      closeRequestedUnlistenRef.current = null;
+    }
+
+    await appWindow.close();
+  };
+
+  const requestWindowClose = async () => {
+    if (closePromptActiveRef.current) {
+      return;
+    }
+
+    closePromptActiveRef.current = true;
+
+    try {
+      if (settings.alwaysSaveTabs) {
+        const tabsToPersist = collectWorkspaceTabsForPersistence();
+        await persistSavedWorkspaceTabs(tabsToPersist);
+      } else {
+        await persistSavedWorkspaceTabs([]);
+      }
+
+      await closeWindowNow();
+    } catch (error) {
+      console.error('window close request failed', error);
+      await closeWindowNow();
+    } finally {
+      closePromptActiveRef.current = false;
+    }
+  };
+
+  requestWindowCloseRef.current = requestWindowClose;
+
   const startMockJob = (label: string) => {
     if (isJobRunning) {
       return;
@@ -324,7 +410,7 @@ export default function App() {
       }
 
       if (action === 'close') {
-        await appWindow.close();
+        await requestWindowClose();
       }
     } catch (error) {
       console.error('window action failed', action, error);
@@ -575,21 +661,6 @@ export default function App() {
       return;
     }
 
-    if (workspaceTabs.length === 1) {
-      const replacement = createWorkspaceTab(settings.envRootDir);
-
-      setWorkspaceTabs([replacement]);
-      setActiveWorkspaceTabId(replacement.id);
-      setMainTabByWorkspace({ [replacement.id]: 'packages' });
-      setSelectedPackageIdByWorkspace({ [replacement.id]: '' });
-      setPackagesByEnvironment({});
-      setEditingWorkspaceTabId(null);
-      setEditingWorkspaceName('');
-
-      void loadWorkspaceEnvironments(replacement.id, replacement.envRootDir);
-      return;
-    }
-
     const nextTabs = workspaceTabs.filter((tab) => tab.id !== workspaceId);
     setWorkspaceTabs(nextTabs);
 
@@ -700,18 +771,64 @@ export default function App() {
       return;
     }
 
-    const initialTab = createWorkspaceTab(settings.envRootDir);
+    let alive = true;
 
-    setWorkspaceTabs([initialTab]);
-    setActiveWorkspaceTabId(initialTab.id);
-    setMainTabByWorkspace({ [initialTab.id]: 'packages' });
-    setSelectedPackageIdByWorkspace({ [initialTab.id]: '' });
-    setPackagesByEnvironment({});
-    setEditingWorkspaceTabId(null);
-    setEditingWorkspaceName('');
+    const resetWorkspaceState = () => {
+      setWorkspaceTabs([]);
+      setActiveWorkspaceTabId('');
+      setMainTabByWorkspace({});
+      setSelectedPackageIdByWorkspace({});
+      setPackagesByEnvironment({});
+      setEditingWorkspaceTabId(null);
+      setEditingWorkspaceName('');
+    };
 
-    void loadWorkspaceEnvironments(initialTab.id, initialTab.envRootDir);
-  }, [isSettingsReady, settings.envRootDir]);
+    const restoreSavedTabs = async () => {
+      try {
+        const savedTabs = await loadSavedWorkspaceTabs();
+
+        if (!alive) {
+          return;
+        }
+
+        if (savedTabs.length === 0) {
+          resetWorkspaceState();
+          return;
+        }
+
+        const restoredTabs = savedTabs.map((tab) => createWorkspaceTab(tab.envRootDir, tab.name));
+
+        setWorkspaceTabs(restoredTabs);
+        setActiveWorkspaceTabId(restoredTabs[0]?.id ?? '');
+        setMainTabByWorkspace(
+          Object.fromEntries(restoredTabs.map((tab) => [tab.id, 'packages'] as const)) as Record<string, MainTab>
+        );
+        setSelectedPackageIdByWorkspace(
+          Object.fromEntries(restoredTabs.map((tab) => [tab.id, ''] as const)) as Record<string, string>
+        );
+        setPackagesByEnvironment({});
+        setEditingWorkspaceTabId(null);
+        setEditingWorkspaceName('');
+
+        for (const tab of restoredTabs) {
+          void loadWorkspaceEnvironments(tab.id, tab.envRootDir);
+        }
+      } catch (error) {
+        console.error(error);
+        await showMessage('Failed to load settings.', 'uvnvpie');
+
+        if (alive) {
+          resetWorkspaceState();
+        }
+      }
+    };
+
+    void restoreSavedTabs();
+
+    return () => {
+      alive = false;
+    };
+  }, [isSettingsReady]);
 
   useEffect(() => {
     if (!selectedEnvironment) {
@@ -832,6 +949,11 @@ export default function App() {
         void syncState();
       })
       .then((unlisten) => {
+        if (!active) {
+          unlisten();
+          return;
+        }
+
         unlistenResized = unlisten;
       })
       .catch((error) => {
@@ -843,6 +965,42 @@ export default function App() {
 
       if (unlistenResized) {
         unlistenResized();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    let unlistenCloseRequested: (() => void) | null = null;
+    let active = true;
+
+    void appWindow
+      .onCloseRequested(async (event: CloseRequestedEvent) => {
+        event.preventDefault();
+        await requestWindowCloseRef.current();
+      })
+      .then((unlisten) => {
+        if (!active) {
+          unlisten();
+          return;
+        }
+
+        unlistenCloseRequested = unlisten;
+        closeRequestedUnlistenRef.current = unlisten;
+      })
+      .catch((error) => {
+        console.error('window close listener registration failed', error);
+      });
+
+    return () => {
+      active = false;
+
+      if (unlistenCloseRequested) {
+        unlistenCloseRequested();
+      }
+
+      if (closeRequestedUnlistenRef.current === unlistenCloseRequested) {
+        closeRequestedUnlistenRef.current = null;
       }
     };
   }, []);

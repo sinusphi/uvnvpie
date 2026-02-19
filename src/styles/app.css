@@ -1226,6 +1226,24 @@ button {
   font-size: 0.84rem;
 }
 
+.checkbox-field-row {
+  display: block;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.checkbox-inline input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #7cc7ff;
+}
+
 .field-row input,
 .field-row select {
   border: 1px solid var(--border-1);
