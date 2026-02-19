@@ -341,6 +341,7 @@ button {
   gap: 6px;
 }
 
+.titlebar-mode-btn,
 .titlebar-icon-btn,
 .window-control,
 .icon-button {
@@ -360,12 +361,26 @@ button {
   justify-content: center;
 }
 
+.titlebar-mode-btn {
+  width: 90px;
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 90px;
+  font-size: 0.74rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
 .titlebar-icon-btn svg {
   width: 14px;
   height: 14px;
   fill: currentColor;
 }
 
+.titlebar-mode-btn:hover,
 .titlebar-icon-btn:hover,
 .window-control:hover,
 .icon-button:hover {
