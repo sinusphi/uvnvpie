@@ -8,3 +8,4 @@ src-tauri/target/
 .env*
 .DS_Store
 CODEX.md
+current_project_branch.md
