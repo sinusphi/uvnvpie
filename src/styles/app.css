@@ -372,6 +372,7 @@ button {
   font-size: 0.74rem;
   font-weight: 650;
   letter-spacing: 0.02em;
+  box-shadow: none;
 }
 
 .titlebar-icon-btn svg {
@@ -380,12 +381,47 @@ button {
   fill: currentColor;
 }
 
-.titlebar-mode-btn:hover,
 .titlebar-icon-btn:hover,
 .window-control:hover,
 .icon-button:hover {
   background: linear-gradient(180deg, var(--panel-hover), var(--panel-2));
   border-color: var(--border-2);
+}
+
+.titlebar-mode-btn:hover {
+  background: linear-gradient(180deg, var(--panel-hover), var(--panel-2));
+  border-color: var(--border-2);
+}
+
+.titlebar-mode-btn.is-project {
+  color: #ecf7ff;
+  border-color: rgba(107, 185, 255, 0.72);
+  background: linear-gradient(180deg, rgba(84, 168, 255, 0.5), rgba(39, 92, 183, 0.56));
+  box-shadow:
+    0 0 0 1px rgba(140, 211, 255, 0.16),
+    0 0 14px rgba(70, 146, 255, 0.34);
+}
+
+.titlebar-mode-btn.is-project:hover {
+  border-color: rgba(129, 204, 255, 0.84);
+  background: linear-gradient(180deg, rgba(101, 181, 255, 0.58), rgba(48, 105, 197, 0.62));
+  box-shadow:
+    0 0 0 1px rgba(164, 223, 255, 0.22),
+    0 0 18px rgba(82, 165, 255, 0.42);
+}
+
+.titlebar-mode-btn:focus-visible {
+  outline: 1px solid rgba(174, 228, 255, 0.88);
+  outline-offset: 1px;
+}
+
+.titlebar-mode-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  border-color: rgba(86, 105, 141, 0.55);
+  background: linear-gradient(180deg, rgba(23, 32, 53, 0.82), rgba(17, 25, 43, 0.88));
+  color: rgba(183, 199, 227, 0.72);
+  box-shadow: none;
 }
 
 .window-controls {

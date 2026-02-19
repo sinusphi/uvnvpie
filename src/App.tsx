@@ -281,6 +281,7 @@ export default function App() {
   const normalizedUvBinaryPath = settings.uvBinaryPath.trim();
   const toolbarProjectActionsDisabled = isJobRunning || !activeProjectDir;
   const toolbarPackageActionsDisabled = toolbarProjectActionsDisabled || !selectedPackage;
+  const isOperationModeDisabled = isJobRunning || isSettingsSaving;
 
   const tabs = useMemo(
     () => [
@@ -1329,6 +1330,7 @@ export default function App() {
             title={t('appTitle')}
             isTaskRunning={isJobRunning}
             operationMode={settings.operationMode}
+            isOperationModeDisabled={isOperationModeDisabled}
             onToggleOperationMode={() => void toggleOperationMode()}
             onOpenSettings={openSettings}
             onOpenAbout={() => setIsAboutOpen(true)}

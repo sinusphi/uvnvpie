@@ -5,6 +5,7 @@ interface TitlebarProps {
   title: string;
   isTaskRunning: boolean;
   operationMode: OperationMode;
+  isOperationModeDisabled: boolean;
   onToggleOperationMode: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
@@ -34,6 +35,7 @@ export default function Titlebar({
   title,
   isTaskRunning,
   operationMode,
+  isOperationModeDisabled,
   onToggleOperationMode,
   onOpenSettings,
   onOpenAbout,
@@ -63,7 +65,12 @@ export default function Titlebar({
       </div>
 
       <div className="titlebar-right" data-tauri-drag-region>
-        <button type="button" className={`titlebar-mode-btn${isProjectMode ? ' is-project' : ''}`} onClick={onToggleOperationMode}>
+        <button
+          type="button"
+          className={`titlebar-mode-btn${isProjectMode ? ' is-project' : ''}`}
+          onClick={onToggleOperationMode}
+          disabled={isOperationModeDisabled}
+        >
           {modeLabel}
         </button>
         <button
