@@ -117,7 +117,7 @@ export default function App() {
 
   const { t } = useI18n(language);
 
-  const createWorkspaceTab = (envRootDir: string, nameOverride = ''): WorkspaceTabState => {
+  const createWorkspaceTab = (envRootDir: string, nameOverride = '', isExpanded = false): WorkspaceTabState => {
     workspaceCounterRef.current += 1;
 
     const folderName = getFolderName(envRootDir);
@@ -129,7 +129,7 @@ export default function App() {
       envRootDir,
       environments: [],
       selectedEnvironmentId: '',
-      isExpanded: true
+      isExpanded
     };
   };
 
@@ -306,7 +306,8 @@ export default function App() {
     return workspaceTabs
       .map((tab) => ({
         envRootDir: tab.envRootDir.trim(),
-        name: tab.name.trim()
+        name: tab.name.trim(),
+        isExpanded: tab.isExpanded
       }))
       .filter((tab) => {
         if (!tab.envRootDir || unique.has(tab.envRootDir)) {
@@ -502,26 +503,44 @@ export default function App() {
       const selection = await open({
         title: t('pickWorkspaceFolderTitle'),
         directory: true,
-        multiple: false
+        multiple: true
       });
 
-      if (typeof selection !== 'string') {
+      const selectedFolders = (Array.isArray(selection) ? selection : [selection])
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+      const uniqueFolders = Array.from(new Set(selectedFolders));
+
+      if (uniqueFolders.length === 0) {
         return;
       }
 
-      const envRootDir = selection.trim();
+      const existingByRootDir = new Map(workspaceTabs.map((tab) => [tab.envRootDir, tab]));
+      const expandedExistingIds = new Set<string>();
+      const newTabs: WorkspaceTabState[] = [];
+      let nextActiveTabId = '';
 
-      if (!envRootDir) {
-        return;
+      for (const envRootDir of uniqueFolders) {
+        const existingTab = existingByRootDir.get(envRootDir);
+
+        if (existingTab) {
+          expandedExistingIds.add(existingTab.id);
+          nextActiveTabId = existingTab.id;
+          continue;
+        }
+
+        const shouldExpandByDefault = workspaceTabs.length === 0 && newTabs.length === 0;
+        const nextTab = createWorkspaceTab(envRootDir, '', shouldExpandByDefault);
+        newTabs.push(nextTab);
+        existingByRootDir.set(envRootDir, nextTab);
+        nextActiveTabId = nextTab.id;
       }
 
-      const existingTab = workspaceTabs.find((tab) => tab.envRootDir === envRootDir);
-
-      if (existingTab) {
-        setActiveWorkspaceTabId(existingTab.id);
+      if (expandedExistingIds.size > 0) {
         setWorkspaceTabs((previous) =>
           previous.map((tab) => {
-            if (tab.id !== existingTab.id) {
+            if (!expandedExistingIds.has(tab.id)) {
               return tab;
             }
 
@@ -532,23 +551,27 @@ export default function App() {
           })
         );
 
-        return;
       }
 
-      const nextTab = createWorkspaceTab(envRootDir);
+      if (newTabs.length > 0) {
+        setWorkspaceTabs((previous) => [...previous, ...newTabs]);
+        setMainTabByWorkspace((previous) => ({
+          ...previous,
+          ...Object.fromEntries(newTabs.map((tab) => [tab.id, 'packages'] as const))
+        }));
+        setSelectedPackageIdByWorkspace((previous) => ({
+          ...previous,
+          ...Object.fromEntries(newTabs.map((tab) => [tab.id, ''] as const))
+        }));
 
-      setWorkspaceTabs((previous) => [...previous, nextTab]);
-      setActiveWorkspaceTabId(nextTab.id);
-      setMainTabByWorkspace((previous) => ({
-        ...previous,
-        [nextTab.id]: 'packages'
-      }));
-      setSelectedPackageIdByWorkspace((previous) => ({
-        ...previous,
-        [nextTab.id]: ''
-      }));
+        for (const tab of newTabs) {
+          void loadWorkspaceEnvironments(tab.id, tab.envRootDir);
+        }
+      }
 
-      void loadWorkspaceEnvironments(nextTab.id, nextTab.envRootDir);
+      if (nextActiveTabId) {
+        setActiveWorkspaceTabId(nextActiveTabId);
+      }
     } catch (error) {
       console.error(error);
       await showMessage(t('settingsLoadFailed'), t('dialogErrorTitle'));
@@ -796,7 +819,7 @@ export default function App() {
           return;
         }
 
-        const restoredTabs = savedTabs.map((tab) => createWorkspaceTab(tab.envRootDir, tab.name));
+        const restoredTabs = savedTabs.map((tab) => createWorkspaceTab(tab.envRootDir, tab.name, tab.isExpanded));
 
         setWorkspaceTabs(restoredTabs);
         setActiveWorkspaceTabId(restoredTabs[0]?.id ?? '');

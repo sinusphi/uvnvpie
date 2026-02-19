@@ -5,6 +5,7 @@ export type Language = 'de' | 'en';
 export interface SavedWorkspaceTab {
   envRootDir: string;
   name: string;
+  isExpanded: boolean;
 }
 
 export interface AppSettings {
@@ -79,7 +80,8 @@ function normalizeSavedWorkspaceTabs(value: unknown): SavedWorkspaceTab[] {
     unique.add(envRootDir);
     tabs.push({
       envRootDir,
-      name: toStringValue(record.name)
+      name: toStringValue(record.name),
+      isExpanded: toBoolean(record.isExpanded, tabs.length === 0)
     });
   }
 
