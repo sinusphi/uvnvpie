@@ -277,10 +277,14 @@ export default function App() {
     return packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
   }, [packages, selectedPackageId]);
 
+  const isProjectMode = settings.operationMode === 'project';
   const activeProjectDir = (activeWorkspace?.envRootDir ?? '').trim();
+  const activeInterpreterPath = (selectedEnvironment?.interpreterPath ?? '').trim();
   const normalizedUvBinaryPath = settings.uvBinaryPath.trim();
-  const toolbarProjectActionsDisabled = isJobRunning || !activeProjectDir;
-  const toolbarPackageActionsDisabled = toolbarProjectActionsDisabled || !selectedPackage;
+  const hasModeActionTarget = isProjectMode ? activeProjectDir.length > 0 : activeInterpreterPath.length > 0;
+  const toolbarModeActionsDisabled = isJobRunning || !hasModeActionTarget;
+  const toolbarPackageActionsDisabled = toolbarModeActionsDisabled || !selectedPackage;
+  const projectOnlyActionsDisabled = isJobRunning || !activeProjectDir || !isProjectMode;
   const isOperationModeDisabled = isJobRunning || isSettingsSaving;
 
   const tabs = useMemo(
@@ -709,7 +713,7 @@ export default function App() {
     steps: Array<{ label: string; run: () => Promise<UvCommandResult> }>,
     options: { refreshPackages?: boolean } = {}
   ) => {
-    if (toolbarProjectActionsDisabled) {
+    if (isJobRunning || !activeProjectDir) {
       return;
     }
 
@@ -754,8 +758,20 @@ export default function App() {
     return requirement;
   };
 
+  const announceDirectModeAction = (actionLabel: string) => {
+    const interpreterHint = activeInterpreterPath || t('notAvailable');
+    appendConsole(`[mode] direct action requested: ${actionLabel}`);
+    appendConsole(`[mode] target interpreter: ${interpreterHint}`);
+    appendConsole('[mode] direct command execution will be wired in phase 3.2/4');
+  };
+
   const handleInstallPackage = async () => {
-    if (toolbarProjectActionsDisabled) {
+    if (toolbarModeActionsDisabled) {
+      return;
+    }
+
+    if (!isProjectMode) {
+      announceDirectModeAction('Install Package');
       return;
     }
 
@@ -777,6 +793,11 @@ export default function App() {
 
   const handleUpgradePackage = async () => {
     if (toolbarPackageActionsDisabled || !selectedPackage) {
+      return;
+    }
+
+    if (!isProjectMode) {
+      announceDirectModeAction(`Upgrade Package ${selectedPackage.name}`);
       return;
     }
 
@@ -808,6 +829,11 @@ export default function App() {
       return;
     }
 
+    if (!isProjectMode) {
+      announceDirectModeAction(`Uninstall Package ${selectedPackage.name}`);
+      return;
+    }
+
     const packageName = selectedPackage.name;
     await runProjectAction(
       `Uninstall Package ${packageName}`,
@@ -825,6 +851,15 @@ export default function App() {
   };
 
   const handleUpdateAll = async () => {
+    if (toolbarModeActionsDisabled) {
+      return;
+    }
+
+    if (!isProjectMode) {
+      announceDirectModeAction('Update All');
+      return;
+    }
+
     await runProjectAction(
       'Update All',
       [
@@ -848,7 +883,7 @@ export default function App() {
   };
 
   const handleAdd = async () => {
-    if (toolbarProjectActionsDisabled) {
+    if (projectOnlyActionsDisabled) {
       return;
     }
 
@@ -873,6 +908,11 @@ export default function App() {
   };
 
   const handleLock = async () => {
+    if (!isProjectMode) {
+      appendConsole('[mode] Lock is only available in Project mode');
+      return;
+    }
+
     await runProjectAction('Lock', [
       {
         label: 'uv lock',
@@ -885,6 +925,11 @@ export default function App() {
   };
 
   const handleSync = async () => {
+    if (!isProjectMode) {
+      appendConsole('[mode] Sync is only available in Project mode');
+      return;
+    }
+
     await runProjectAction(
       'Sync',
       [
@@ -1381,7 +1426,7 @@ export default function App() {
                         <button
                           type="button"
                           className="secondary-button"
-                          disabled={toolbarProjectActionsDisabled}
+                          disabled={toolbarModeActionsDisabled}
                           onClick={() => void handleInstallPackage()}
                         >
                           Install Package
@@ -1405,23 +1450,25 @@ export default function App() {
                         <button
                           type="button"
                           className="secondary-button"
-                          disabled={toolbarProjectActionsDisabled}
+                          disabled={toolbarModeActionsDisabled}
                           onClick={() => void handleUpdateAll()}
                         >
                           Update All
                         </button>
+                        {isProjectMode ? (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={projectOnlyActionsDisabled}
+                            onClick={() => void handleAdd()}
+                          >
+                            Add
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="secondary-button"
-                          disabled={toolbarProjectActionsDisabled}
-                          onClick={() => void handleAdd()}
-                        >
-                          Add
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          disabled={toolbarProjectActionsDisabled}
+                          disabled={projectOnlyActionsDisabled}
                           onClick={() => void handleLock()}
                         >
                           Lock
@@ -1429,7 +1476,7 @@ export default function App() {
                         <button
                           type="button"
                           className="secondary-button"
-                          disabled={toolbarProjectActionsDisabled}
+                          disabled={projectOnlyActionsDisabled}
                           onClick={() => void handleSync()}
                         >
                           Sync

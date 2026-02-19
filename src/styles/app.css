@@ -337,6 +337,7 @@ button {
 }
 
 .titlebar-right {
+  --mode-warning: #ffd257;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -375,6 +376,43 @@ button {
   box-shadow: none;
 }
 
+.titlebar-direct-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-right: 2px;
+  color: var(--mode-warning);
+}
+
+.titlebar-direct-warning-text {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.1;
+  font-size: 0.55rem;
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  color: var(--mode-warning);
+  text-align: right;
+  height: 28px;
+}
+
+.titlebar-direct-warning-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mode-warning);
+}
+
+.titlebar-direct-warning-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .titlebar-icon-btn svg {
   width: 14px;
   height: 14px;
@@ -398,16 +436,26 @@ button {
   border-color: rgba(107, 185, 255, 0.72);
   background: linear-gradient(180deg, rgba(84, 168, 255, 0.5), rgba(39, 92, 183, 0.56));
   box-shadow:
-    0 0 0 1px rgba(140, 211, 255, 0.16),
-    0 0 14px rgba(70, 146, 255, 0.34);
+    0 0 0 1px rgba(140, 211, 255, 0.1),
+    0 0 8px rgba(70, 146, 255, 0.2);
 }
 
 .titlebar-mode-btn.is-project:hover {
   border-color: rgba(129, 204, 255, 0.84);
   background: linear-gradient(180deg, rgba(101, 181, 255, 0.58), rgba(48, 105, 197, 0.62));
   box-shadow:
-    0 0 0 1px rgba(164, 223, 255, 0.22),
-    0 0 18px rgba(82, 165, 255, 0.42);
+    0 0 0 1px rgba(164, 223, 255, 0.14),
+    0 0 10px rgba(82, 165, 255, 0.24);
+}
+
+.titlebar-mode-btn.is-direct {
+  border-color: var(--mode-warning);
+  color: var(--mode-warning);
+}
+
+.titlebar-mode-btn.is-direct:hover {
+  border-color: var(--mode-warning);
+  color: var(--mode-warning);
 }
 
 .titlebar-mode-btn:focus-visible {
