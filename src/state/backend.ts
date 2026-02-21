@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { EnvironmentItem, PackageItem, UvCommandResult } from '../types/domain';
+import type { EnvironmentItem, PackageItem, ProjectFileNode, UvCommandResult } from '../types/domain';
 
 type RawRecord = Record<string, unknown>;
 
@@ -87,6 +87,22 @@ function normalizePackage(value: unknown): PackageItem {
   };
 }
 
+function normalizeProjectFileNode(value: unknown): ProjectFileNode {
+  const record = (value ?? {}) as RawRecord;
+  const childrenRaw = Array.isArray(record.children) ? record.children : [];
+  const nodeTypeRaw = asString(record.nodeType);
+  const nodeType: ProjectFileNode['nodeType'] =
+    nodeTypeRaw === 'directory' || nodeTypeRaw === 'file' || nodeTypeRaw === 'symlink' ? nodeTypeRaw : 'other';
+
+  return {
+    id: asString(record.id),
+    name: asString(record.name),
+    path: asString(record.path),
+    nodeType,
+    children: childrenRaw.map((child) => normalizeProjectFileNode(child))
+  };
+}
+
 export async function fetchEnvironments(envRootDir: string): Promise<EnvironmentItem[]> {
   const response = await invoke<unknown[]>('list_environments', {
     envRootDir: envRootDir.trim() ? envRootDir : null
@@ -118,6 +134,41 @@ export async function fetchEnvironmentPackages(interpreterPath: string): Promise
     .map(normalizePackage)
     .filter((pkg) => pkg.id && pkg.name)
     .sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }));
+}
+
+export async function isValidProjectRoot(projectDir: string): Promise<boolean> {
+  const normalized = projectDir.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  try {
+    const response = await invoke<unknown>('is_valid_project_root', {
+      projectDir: normalized
+    });
+    return asBoolean(response);
+  } catch (error) {
+    throw new Error(`[is_valid_project_root] ${toErrorMessage(error)}`);
+  }
+}
+
+export async function fetchProjectFiles(projectDir: string): Promise<ProjectFileNode[]> {
+  const normalized = projectDir.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const response = await invoke<unknown[]>('list_project_files', {
+    projectDir: normalized
+  });
+
+  if (!Array.isArray(response)) {
+    return [];
+  }
+
+  return response
+    .map((entry) => normalizeProjectFileNode(entry))
+    .filter((entry) => entry.id && entry.path && entry.name);
 }
 
 export async function runUvAdd(
@@ -193,5 +244,59 @@ export async function runUvUninstall(
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
     packageName
+  });
+}
+
+export async function runUvDirectInstall(
+  interpreterPath: string,
+  requirement: string,
+  options?: {
+    uvBinaryPath?: string;
+  }
+): Promise<UvCommandResult> {
+  return invokeUvCommand('uv_direct_install', {
+    interpreterPath,
+    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
+    requirement
+  });
+}
+
+export async function runUvDirectUpgrade(
+  interpreterPath: string,
+  packageName: string,
+  options?: {
+    uvBinaryPath?: string;
+  }
+): Promise<UvCommandResult> {
+  return invokeUvCommand('uv_direct_upgrade', {
+    interpreterPath,
+    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
+    packageName
+  });
+}
+
+export async function runUvDirectUninstall(
+  interpreterPath: string,
+  packageName: string,
+  options?: {
+    uvBinaryPath?: string;
+  }
+): Promise<UvCommandResult> {
+  return invokeUvCommand('uv_direct_uninstall', {
+    interpreterPath,
+    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
+    packageName
+  });
+}
+
+export async function runUvDirectUpdateAll(
+  interpreterPath: string,
+  options?: {
+    uvBinaryPath?: string;
+  }
+): Promise<UvCommandResult> {
+  return invokeUvCommand('uv_direct_update_all', {
+    interpreterPath,
+    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath)
   });
 }

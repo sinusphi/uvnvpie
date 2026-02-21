@@ -6,6 +6,21 @@ export interface EnvironmentItem {
   location: string;
 }
 
+export interface ProjectItem {
+  id: string;
+  name: string;
+  rootDir: string;
+  pyprojectPath: string;
+}
+
+export interface ProjectFileNode {
+  id: string;
+  name: string;
+  path: string;
+  nodeType: 'directory' | 'file' | 'symlink' | 'other';
+  children: ProjectFileNode[];
+}
+
 export interface PackageItem {
   id: string;
   name: string;
@@ -23,3 +38,60 @@ export interface UvCommandResult {
   stderr: string;
   command: string;
 }
+
+export type SidebarTreeKind = 'environments' | 'projects';
+
+interface SidebarTreeNodeBase {
+  id: string;
+  label: string;
+}
+
+export interface EnvironmentTreeWorkspaceNode extends SidebarTreeNodeBase {
+  tree: 'environments';
+  nodeType: 'workspace';
+  workspaceId: string;
+  isExpanded: boolean;
+}
+
+export interface EnvironmentTreeItemNode extends SidebarTreeNodeBase {
+  tree: 'environments';
+  nodeType: 'environment';
+  workspaceId: string;
+  environmentId: string;
+  environment: EnvironmentItem;
+}
+
+export type EnvironmentTreeNode = EnvironmentTreeWorkspaceNode | EnvironmentTreeItemNode;
+
+export interface ProjectTreeWorkspaceNode extends SidebarTreeNodeBase {
+  tree: 'projects';
+  nodeType: 'workspace';
+  workspaceId: string;
+  isExpanded: boolean;
+}
+
+export interface ProjectTreeItemNode extends SidebarTreeNodeBase {
+  tree: 'projects';
+  nodeType: 'project';
+  workspaceId: string;
+  projectId: string;
+  project: ProjectItem;
+}
+
+export type ProjectTreeNode = ProjectTreeWorkspaceNode | ProjectTreeItemNode;
+
+export interface DirectOperationTarget {
+  mode: 'direct';
+  workspaceId: string;
+  environmentId: string;
+  interpreterPath: string;
+}
+
+export interface ProjectOperationTarget {
+  mode: 'project';
+  workspaceId: string;
+  projectId: string;
+  projectDir: string;
+}
+
+export type OperationTarget = DirectOperationTarget | ProjectOperationTarget;

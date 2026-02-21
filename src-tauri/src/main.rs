@@ -25,6 +25,16 @@ fn list_environment_packages(interpreter_path: String) -> Result<Vec<uv::Package
 }
 
 #[tauri::command(rename_all = "camelCase")]
+fn is_valid_project_root(project_dir: String) -> Result<bool, String> {
+    uv::is_valid_project_root(project_dir)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn list_project_files(project_dir: String) -> Result<Vec<uv::ProjectFileNode>, String> {
+    uv::list_project_files(project_dir)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn uv_add(
     project_dir: String,
     uv_binary_path: Option<String>,
@@ -32,7 +42,13 @@ fn uv_add(
     dev: bool,
     optional_group: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_add(project_dir, uv_binary_path, requirement, dev, optional_group)
+    uv::uv_add(
+        project_dir,
+        uv_binary_path,
+        requirement,
+        dev,
+        optional_group,
+    )
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -70,6 +86,41 @@ fn uv_uninstall(
     package_name: String,
 ) -> Result<uv::UvCommandResult, String> {
     uv::uv_uninstall(project_dir, uv_binary_path, package_name)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_direct_install(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+    requirement: String,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_direct_install(interpreter_path, uv_binary_path, requirement)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_direct_upgrade(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_direct_upgrade(interpreter_path, uv_binary_path, package_name)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_direct_uninstall(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_direct_uninstall(interpreter_path, uv_binary_path, package_name)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn uv_direct_update_all(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+) -> Result<uv::UvCommandResult, String> {
+    uv::uv_direct_update_all(interpreter_path, uv_binary_path)
 }
 
 #[cfg(target_os = "linux")]
@@ -168,11 +219,17 @@ fn main() {
             get_uv_version,
             list_environments,
             list_environment_packages,
+            is_valid_project_root,
+            list_project_files,
             uv_add,
             uv_lock,
             uv_sync,
             uv_upgrade,
-            uv_uninstall
+            uv_uninstall,
+            uv_direct_install,
+            uv_direct_upgrade,
+            uv_direct_uninstall,
+            uv_direct_update_all
         ])
         .run(tauri::generate_context!())
         .expect("error while running uvnvpie");

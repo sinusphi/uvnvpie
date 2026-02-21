@@ -36,6 +36,16 @@ pub struct UvCommandResult {
     pub command: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectFileNode {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub node_type: String,
+    pub children: Vec<ProjectFileNode>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawPackageItem {
@@ -47,6 +57,11 @@ struct RawPackageItem {
     license: String,
     #[serde(default)]
     home_page: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawOutdatedPackageItem {
+    name: String,
 }
 
 const PACKAGE_QUERY_SCRIPT: &str = r#"
@@ -187,6 +202,206 @@ pub fn uv_uninstall(
     run_uv_command(project_dir, uv_binary_path, args)
 }
 
+pub fn is_valid_project_root(project_dir: String) -> Result<bool, String> {
+    let normalized = project_dir.trim();
+    if normalized.is_empty() {
+        return Ok(false);
+    }
+
+    let project_path = PathBuf::from(normalized);
+    if !project_path.is_dir() {
+        return Ok(false);
+    }
+
+    Ok(project_path.join("pyproject.toml").is_file())
+}
+
+pub fn list_project_files(project_dir: String) -> Result<Vec<ProjectFileNode>, String> {
+    let normalized = project_dir.trim();
+    if normalized.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let root_path = PathBuf::from(normalized);
+    if !root_path.is_dir() {
+        return Err(format!(
+            "Project directory does not exist or is not a directory: {}",
+            root_path.display()
+        ));
+    }
+
+    read_project_directory_children(&root_path)
+}
+
+pub fn uv_direct_install(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+    requirement: String,
+) -> Result<UvCommandResult, String> {
+    let requirement = required_text("Requirement", requirement)?;
+    let interpreter = validate_interpreter_path(interpreter_path)?;
+
+    let args = vec![
+        "pip".to_string(),
+        "install".to_string(),
+        "--python".to_string(),
+        interpreter.to_string_lossy().to_string(),
+        requirement,
+    ];
+
+    run_uv_direct_command(uv_binary_path, args)
+}
+
+pub fn uv_direct_upgrade(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<UvCommandResult, String> {
+    let package_name = required_text("Package name", package_name)?;
+    let interpreter = validate_interpreter_path(interpreter_path)?;
+
+    let args = vec![
+        "pip".to_string(),
+        "install".to_string(),
+        "--python".to_string(),
+        interpreter.to_string_lossy().to_string(),
+        "--upgrade".to_string(),
+        package_name,
+    ];
+
+    run_uv_direct_command(uv_binary_path, args)
+}
+
+pub fn uv_direct_uninstall(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+    package_name: String,
+) -> Result<UvCommandResult, String> {
+    let package_name = required_text("Package name", package_name)?;
+    let interpreter = validate_interpreter_path(interpreter_path)?;
+
+    let args = vec![
+        "pip".to_string(),
+        "uninstall".to_string(),
+        "--python".to_string(),
+        interpreter.to_string_lossy().to_string(),
+        package_name,
+    ];
+
+    run_uv_direct_command(uv_binary_path, args)
+}
+
+pub fn uv_direct_update_all(
+    interpreter_path: String,
+    uv_binary_path: Option<String>,
+) -> Result<UvCommandResult, String> {
+    let interpreter = validate_interpreter_path(interpreter_path)?;
+    let interpreter_value = interpreter.to_string_lossy().to_string();
+    let binary = resolve_uv_binary(uv_binary_path)?;
+
+    let list_args = vec![
+        "pip".to_string(),
+        "list".to_string(),
+        "--python".to_string(),
+        interpreter_value.clone(),
+        "--outdated".to_string(),
+        "--format".to_string(),
+        "json".to_string(),
+    ];
+    let list_preview = format_command_preview_without_cwd(&binary, &list_args);
+    let list_output = Command::new(&binary)
+        .args(&list_args)
+        .output()
+        .map_err(|error| format!("Failed to run command {list_preview}: {error}"))?;
+
+    let list_stdout = String::from_utf8_lossy(&list_output.stdout)
+        .trim()
+        .to_string();
+    let list_stderr = String::from_utf8_lossy(&list_output.stderr)
+        .trim()
+        .to_string();
+
+    if !list_output.status.success() {
+        return Ok(UvCommandResult {
+            success: false,
+            exit_code: list_output.status.code().unwrap_or(-1),
+            stdout: list_stdout,
+            stderr: list_stderr,
+            command: list_preview,
+        });
+    }
+
+    let outdated_packages: Vec<RawOutdatedPackageItem> = if list_stdout.trim().is_empty() {
+        Vec::new()
+    } else {
+        match serde_json::from_str(&list_stdout) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                return Ok(UvCommandResult {
+                    success: false,
+                    exit_code: -1,
+                    stdout: list_stdout,
+                    stderr: combine_output_lines(
+                        &list_stderr,
+                        &format!("Failed to parse outdated package list: {error}"),
+                    ),
+                    command: list_preview,
+                });
+            }
+        }
+    };
+
+    let package_names: Vec<String> = outdated_packages
+        .into_iter()
+        .map(|item| item.name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect();
+
+    if package_names.is_empty() {
+        return Ok(UvCommandResult {
+            success: true,
+            exit_code: 0,
+            stdout: "All installed packages are already up to date.".to_string(),
+            stderr: list_stderr,
+            command: list_preview,
+        });
+    }
+
+    let mut install_args = vec![
+        "pip".to_string(),
+        "install".to_string(),
+        "--python".to_string(),
+        interpreter_value,
+        "--upgrade".to_string(),
+    ];
+    install_args.extend(package_names.clone());
+    let install_preview = format_command_preview_without_cwd(&binary, &install_args);
+
+    let install_output = Command::new(&binary)
+        .args(&install_args)
+        .output()
+        .map_err(|error| format!("Failed to run command {install_preview}: {error}"))?;
+
+    let install_stdout = String::from_utf8_lossy(&install_output.stdout)
+        .trim()
+        .to_string();
+    let install_stderr = String::from_utf8_lossy(&install_output.stderr)
+        .trim()
+        .to_string();
+    let combined_stdout = combine_output_lines(
+        &format!("Outdated packages: {}", package_names.join(", ")),
+        &install_stdout,
+    );
+
+    Ok(UvCommandResult {
+        success: install_output.status.success(),
+        exit_code: install_output.status.code().unwrap_or(-1),
+        stdout: combined_stdout,
+        stderr: combine_output_lines(&list_stderr, &install_stderr),
+        command: format!("{list_preview} && {install_preview}"),
+    })
+}
+
 pub fn list_environments(env_root_dir: Option<String>) -> Result<Vec<EnvironmentItem>, String> {
     let roots = environment_roots(env_root_dir);
     let mut environments = Vec::new();
@@ -311,6 +526,94 @@ fn environment_roots(explicit_root: Option<String>) -> Vec<PathBuf> {
     roots
 }
 
+fn read_project_directory_children(directory: &Path) -> Result<Vec<ProjectFileNode>, String> {
+    let mut nodes = Vec::new();
+    let entries = fs::read_dir(directory).map_err(|error| {
+        format!(
+            "Failed to read project directory '{}': {error}",
+            directory.display()
+        )
+    })?;
+
+    for entry_result in entries {
+        let entry = entry_result.map_err(|error| {
+            format!(
+                "Failed to read entry in project directory '{}': {error}",
+                directory.display()
+            )
+        })?;
+
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|error| {
+            format!(
+                "Failed to read metadata for project entry '{}': {error}",
+                path.display()
+            )
+        })?;
+
+        nodes.push(build_project_file_node(path, metadata)?);
+    }
+
+    sort_project_file_nodes(&mut nodes);
+    Ok(nodes)
+}
+
+fn build_project_file_node(path: PathBuf, metadata: fs::Metadata) -> Result<ProjectFileNode, String> {
+    let file_type = metadata.file_type();
+    let is_symlink = file_type.is_symlink();
+    let is_directory = file_type.is_dir() && !is_symlink;
+
+    let node_type = if is_directory {
+        "directory"
+    } else if file_type.is_file() {
+        "file"
+    } else if is_symlink {
+        "symlink"
+    } else {
+        "other"
+    };
+
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| path.to_string_lossy().to_string());
+    let path_text = path.to_string_lossy().to_string();
+
+    let children = if is_directory {
+        read_project_directory_children(&path)?
+    } else {
+        Vec::new()
+    };
+
+    Ok(ProjectFileNode {
+        id: path_text.clone(),
+        name,
+        path: path_text,
+        node_type: node_type.to_string(),
+        children,
+    })
+}
+
+fn sort_project_file_nodes(nodes: &mut [ProjectFileNode]) {
+    nodes.sort_by(|left, right| {
+        let left_rank = project_node_sort_rank(left);
+        let right_rank = project_node_sort_rank(right);
+        left_rank
+            .cmp(&right_rank)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+}
+
+fn project_node_sort_rank(node: &ProjectFileNode) -> u8 {
+    match node.node_type.as_str() {
+        "directory" => 0,
+        "file" => 1,
+        "symlink" => 2,
+        _ => 3,
+    }
+}
+
 fn detect_interpreter_path(environment_dir: &Path) -> Option<PathBuf> {
     let unix_candidates = [
         environment_dir.join("bin").join("python"),
@@ -371,6 +674,27 @@ fn run_uv_command(
     })
 }
 
+fn run_uv_direct_command(
+    uv_binary_path: Option<String>,
+    args: Vec<String>,
+) -> Result<UvCommandResult, String> {
+    let binary = resolve_uv_binary(uv_binary_path)?;
+    let command_preview = format_command_preview_without_cwd(&binary, &args);
+
+    let output = Command::new(&binary)
+        .args(&args)
+        .output()
+        .map_err(|error| format!("Failed to run command {command_preview}: {error}"))?;
+
+    Ok(UvCommandResult {
+        success: output.status.success(),
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        command: command_preview,
+    })
+}
+
 fn validate_project_directory(project_dir: String) -> Result<PathBuf, String> {
     let project_dir = project_dir.trim();
     if project_dir.is_empty() {
@@ -394,6 +718,23 @@ fn validate_project_directory(project_dir: String) -> Result<PathBuf, String> {
     }
 
     Ok(project_path)
+}
+
+fn validate_interpreter_path(interpreter_path: String) -> Result<PathBuf, String> {
+    let interpreter_path = interpreter_path.trim();
+    if interpreter_path.is_empty() {
+        return Err("Interpreter path is required.".to_string());
+    }
+
+    let interpreter = PathBuf::from(interpreter_path);
+    if !interpreter.is_file() {
+        return Err(format!(
+            "Interpreter path does not exist or is not a file: {}",
+            interpreter.display()
+        ));
+    }
+
+    Ok(interpreter)
 }
 
 fn resolve_uv_binary(uv_binary_path: Option<String>) -> Result<String, String> {
@@ -435,6 +776,28 @@ fn format_command_preview(binary: &str, args: &[String], project_path: &Path) ->
         shell_quote(project_path.to_string_lossy().as_ref()),
         command_parts.join(" ")
     )
+}
+
+fn format_command_preview_without_cwd(binary: &str, args: &[String]) -> String {
+    let mut command_parts = Vec::with_capacity(args.len() + 1);
+    command_parts.push(shell_quote(binary));
+    command_parts.extend(args.iter().map(|value| shell_quote(value)));
+    command_parts.join(" ")
+}
+
+fn combine_output_lines(first: &str, second: &str) -> String {
+    let first = first.trim();
+    let second = second.trim();
+
+    if first.is_empty() {
+        return second.to_string();
+    }
+
+    if second.is_empty() {
+        return first.to_string();
+    }
+
+    format!("{first}\n{second}")
 }
 
 fn shell_quote(value: &str) -> String {
