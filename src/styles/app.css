@@ -873,25 +873,36 @@ button {
   min-height: 0;
   overflow-x: auto;
   padding-bottom: 2px;
+  transform: translateY(24px);
 }
 
 .workspace-tab {
   display: inline-flex;
   align-items: center;
+  height: 40px;
   min-width: 140px;
   max-width: 240px;
-  border: 1px solid var(--border-0);
-  border-radius: 10px;
-  background: rgba(16, 25, 43, 0.72);
+  padding-bottom: 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(166, 180, 205, 0.66);
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.workspace-tab:not(.active):hover {
+  color: var(--text-0);
 }
 
 .workspace-tab.active {
-  border-color: rgba(124, 199, 255, 0.5);
-  background: linear-gradient(180deg, rgba(76, 142, 223, 0.42), rgba(37, 74, 132, 0.5));
+  border: 0;
+  box-shadow: none;
+  color: var(--text-0);
+  background: #152137;
 }
 
 .workspace-tab.editing {
-  border-color: rgba(124, 199, 255, 0.62);
+  box-shadow: 0 0 0 1px rgba(124, 199, 255, 0.62);
 }
 
 .workspace-tab-button {
@@ -917,6 +928,10 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.83rem;
+  font-weight: 560;
+}
+
+.workspace-tab.active .workspace-tab-label {
   font-weight: 600;
 }
 
@@ -936,14 +951,15 @@ button {
 }
 
 .workspace-tab-close {
-  width: 24px;
-  height: 24px;
-  border: 0;
+  width: 20px;
+  height: 17.5px;
+  border: 1px solid var(--border-0);
   border-radius: 7px;
   margin-right: 6px;
-  padding: 0;
-  background: rgba(9, 14, 24, 0.55);
-  color: var(--text-2);
+  margin-bottom: 2px;
+  padding-bottom: 3px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel-1));
+  color: rgba(153, 168, 193, 0.58);
   font-size: 0.8rem;
   line-height: 1;
   display: inline-flex;
@@ -951,7 +967,20 @@ button {
   justify-content: center;
 }
 
+.workspace-tab.active .workspace-tab-close {
+  border-color: var(--border-0);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel-1));
+  color: var(--text-2);
+}
+
 .workspace-tab-close:hover {
+  border-color: rgba(240, 103, 103, 0.6);
+  background: rgba(240, 103, 103, 0.24);
+  color: #ffdede;
+}
+
+.workspace-tab.active .workspace-tab-close:hover {
+  border-color: rgba(240, 103, 103, 0.6);
   background: rgba(240, 103, 103, 0.24);
   color: #ffdede;
 }
@@ -1123,6 +1152,10 @@ button {
 }
 
 .packages-section {
+  border: 1px solid var(--border-0);
+  box-shadow: none;
+  border-radius: 10px;
+  background: #152137;
   padding: 12px;
   display: grid;
   min-height: 0;
@@ -1163,6 +1196,7 @@ button {
   border-radius: 10px;
   min-height: 0;
   overflow: auto;
+  background: rgba(27, 42, 74, 0.95);
 }
 
 .packages-table {
@@ -1181,7 +1215,7 @@ button {
   padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid rgba(42, 59, 96, 0.52);
-  line-height: 1.0;
+  line-height: 0.9;
 }
 
 .packages-table th {
@@ -1193,12 +1227,20 @@ button {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: rgba(16, 25, 43, 0.98);
+  background: rgba(15, 24, 41, 0.98);
 }
 
 .packages-table tbody tr {
   cursor: pointer;
   transition: background-color 120ms ease;
+}
+
+.packages-table tbody tr:nth-child(odd) {
+  background: rgba(20, 31, 54, 0.7);
+}
+
+.packages-table tbody tr:nth-child(even) {
+  background: rgba(27, 43, 74, 0.72);
 }
 
 .packages-table tbody tr:hover {
