@@ -7,6 +7,10 @@ export interface SavedWorkspaceTab {
   envRootDir: string;
   name: string;
   isExpanded: boolean;
+  isProjectExpanded: boolean;
+  isEnvironmentExpanded: boolean;
+  showInProjects: boolean;
+  showInEnvironments: boolean;
 }
 
 export interface AppSettings {
@@ -89,7 +93,17 @@ function normalizeSavedWorkspaceTabs(value: unknown): SavedWorkspaceTab[] {
     tabs.push({
       envRootDir,
       name: toStringValue(record.name),
-      isExpanded: toBoolean(record.isExpanded, tabs.length === 0)
+      isExpanded: toBoolean(record.isExpanded, tabs.length === 0),
+      isProjectExpanded: toBoolean(
+        record.isProjectExpanded,
+        toBoolean(record.isExpanded, tabs.length === 0)
+      ),
+      isEnvironmentExpanded: toBoolean(
+        record.isEnvironmentExpanded,
+        toBoolean(record.isExpanded, tabs.length === 0)
+      ),
+      showInProjects: toBoolean(record.showInProjects, false),
+      showInEnvironments: toBoolean(record.showInEnvironments, true)
     });
   }
 
