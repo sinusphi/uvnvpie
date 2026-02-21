@@ -99,8 +99,7 @@ export default function WorkspaceTabs({
                 event.stopPropagation();
                 onCloseTab(tab.id);
               }}
-            >
-              x
+              >x
             </button>
           </div>
         );
