@@ -5,8 +5,10 @@ interface TitlebarProps {
   title: string;
   isTaskRunning: boolean;
   operationMode: OperationMode;
+  autoSwitchModeEnabled: boolean;
   isOperationModeDisabled: boolean;
   onToggleOperationMode: () => void;
+  onToggleAutoSwitchMode: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
   onMinimize: () => void;
@@ -35,8 +37,10 @@ export default function Titlebar({
   title,
   isTaskRunning,
   operationMode,
+  autoSwitchModeEnabled,
   isOperationModeDisabled,
   onToggleOperationMode,
+  onToggleAutoSwitchMode,
   onOpenSettings,
   onOpenAbout,
   onMinimize,
@@ -46,7 +50,16 @@ export default function Titlebar({
 }: TitlebarProps) {
   const isProjectMode = operationMode === 'project';
   const isDirectMode = !isProjectMode;
-  const modeLabel = isProjectMode ? t('projectMode') : t('directMode');
+  const modeLabel = autoSwitchModeEnabled ? t('autoSwitchLabel') : isProjectMode ? t('projectMode') : t('directMode');
+  const modeClass = autoSwitchModeEnabled ? ' is-auto' : isProjectMode ? ' is-project' : ' is-direct';
+  const modeAriaLabel = autoSwitchModeEnabled
+    ? t('autoSwitchModeActive')
+    : isProjectMode
+      ? t('switchToDirectMode')
+      : t('switchToProjectMode');
+  const autoSwitchLabel = autoSwitchModeEnabled ? t('switchToManualMode') : t('switchToAutoSwitchMode');
+  const autoSwitchStateLabel = autoSwitchModeEnabled ? t('autoSwitchModeActive') : t('autoSwitchModeInactive');
+  const operationModeButtonDisabled = isOperationModeDisabled || autoSwitchModeEnabled;
 
   return (
     <header className="titlebar" data-operation-mode={operationMode}>
@@ -83,13 +96,27 @@ export default function Titlebar({
           ) : null}
           <button
             type="button"
-            className={`titlebar-mode-btn${isProjectMode ? ' is-project' : ' is-direct'}`}
+            className={`titlebar-mode-btn${modeClass}`}
             onClick={onToggleOperationMode}
-            aria-pressed={isProjectMode}
-            aria-label={isProjectMode ? t('switchToDirectMode') : t('switchToProjectMode')}
-            disabled={isOperationModeDisabled}
+            aria-pressed={autoSwitchModeEnabled ? undefined : isProjectMode}
+            aria-label={modeAriaLabel}
+            disabled={operationModeButtonDisabled}
           >
             {modeLabel}
+          </button>
+          <button
+            type="button"
+            className={`titlebar-auto-switch${autoSwitchModeEnabled ? ' is-active' : ''}`}
+            role="switch"
+            aria-checked={autoSwitchModeEnabled}
+            aria-label={autoSwitchLabel}
+            title={autoSwitchStateLabel}
+            onClick={onToggleAutoSwitchMode}
+            disabled={isOperationModeDisabled}
+          >
+            <span className="titlebar-auto-switch-track" aria-hidden="true">
+              <span className="titlebar-auto-switch-thumb" />
+            </span>
           </button>
           <button
             type="button"
