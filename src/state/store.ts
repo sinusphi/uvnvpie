@@ -16,6 +16,7 @@ export interface SavedWorkspaceTab {
 export interface AppSettings {
   language: Language;
   operationMode: OperationMode;
+  autoSwitchMode: boolean;
   envRootDir: string;
   uvBinaryPath: string;
   autoSaveDebounceMs: number;
@@ -25,6 +26,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'de',
   operationMode: 'project',
+  autoSwitchMode: false,
   envRootDir: '',
   uvBinaryPath: '',
   autoSaveDebounceMs: 200,
@@ -39,6 +41,7 @@ const SAVED_WORKSPACE_TABS_KEY = 'savedWorkspaceTabs';
 const SETTING_KEYS: Array<keyof AppSettings> = [
   'language',
   'operationMode',
+  'autoSwitchMode',
   'envRootDir',
   'uvBinaryPath',
   'autoSaveDebounceMs',
@@ -114,6 +117,7 @@ function normalizeSettings(raw: Partial<Record<keyof AppSettings, unknown>>): Ap
   return {
     language: toLanguage(raw.language),
     operationMode: toOperationMode(raw.operationMode),
+    autoSwitchMode: toBoolean(raw.autoSwitchMode, DEFAULT_SETTINGS.autoSwitchMode),
     envRootDir: toStringValue(raw.envRootDir),
     uvBinaryPath: toStringValue(raw.uvBinaryPath),
     autoSaveDebounceMs: toDebounce(raw.autoSaveDebounceMs),
