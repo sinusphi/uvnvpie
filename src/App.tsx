@@ -143,6 +143,10 @@ function getNextOperationMode(mode: OperationMode): OperationMode {
   return mode === 'project' ? 'direct' : 'project';
 }
 
+function getAutoSwitchOperationMode(workspace: WorkspaceTabState | null): OperationMode {
+  return workspace?.showInProjects ? 'project' : 'direct';
+}
+
 function normalizeFolderSelection(selection: string | string[] | null): string[] {
   const selectedFolders = (Array.isArray(selection) ? selection : [selection])
     .filter((value): value is string => typeof value === 'string')
@@ -470,6 +474,10 @@ export default function App() {
     return activeWorkspace.projects.find((project) => project.id === activeWorkspace.selectedProjectId) ?? null;
   }, [activeWorkspace]);
 
+  const autoSwitchOperationMode = useMemo<OperationMode>(() => {
+    return getAutoSwitchOperationMode(activeWorkspace);
+  }, [activeWorkspace]);
+
   const isProjectMode = settings.operationMode === 'project';
   const isManagedProjectContext = selectedProject !== null;
   const activeProjectDir = (selectedProject?.rootDir ?? '').trim();
@@ -660,7 +668,7 @@ export default function App() {
   };
 
   const toggleOperationMode = async () => {
-    if (isSettingsSaving || isJobRunning) {
+    if (settings.autoSwitchMode || isSettingsSaving || isJobRunning) {
       return;
     }
 
@@ -690,6 +698,55 @@ export default function App() {
       }));
       setSettingsDraft((previous) => ({
         ...previous,
+        operationMode: previousMode
+      }));
+      await showMessage(t('settingsSaveFailed'), t('dialogErrorTitle'));
+    }
+  };
+
+  const toggleAutoSwitchMode = async () => {
+    if (isSettingsSaving || isJobRunning) {
+      return;
+    }
+
+    const previousAutoSwitch = settings.autoSwitchMode;
+    const previousMode = settings.operationMode;
+    const nextAutoSwitch = !previousAutoSwitch;
+    const nextMode = nextAutoSwitch ? getAutoSwitchOperationMode(activeWorkspace) : previousMode;
+
+    setSettings((previous) => ({
+      ...previous,
+      autoSwitchMode: nextAutoSwitch,
+      operationMode: nextMode
+    }));
+    setSettingsDraft((previous) => ({
+      ...previous,
+      autoSwitchMode: nextAutoSwitch,
+      operationMode: nextMode
+    }));
+
+    try {
+      await persistAppSettings({
+        ...settings,
+        autoSwitchMode: nextAutoSwitch,
+        operationMode: nextMode
+      });
+
+      appendConsole(`[mode] auto switch ${nextAutoSwitch ? 'enabled' : 'disabled'}`);
+
+      if (nextAutoSwitch && nextMode !== previousMode) {
+        appendConsole(`[mode] auto-switched to ${nextMode}`);
+      }
+    } catch (error) {
+      console.error(error);
+      setSettings((previous) => ({
+        ...previous,
+        autoSwitchMode: previousAutoSwitch,
+        operationMode: previousMode
+      }));
+      setSettingsDraft((previous) => ({
+        ...previous,
+        autoSwitchMode: previousAutoSwitch,
         operationMode: previousMode
       }));
       await showMessage(t('settingsSaveFailed'), t('dialogErrorTitle'));
@@ -1663,6 +1720,47 @@ export default function App() {
   }, [isSettingsReady]);
 
   useEffect(() => {
+    if (!settings.autoSwitchMode) {
+      return;
+    }
+
+    if (settings.operationMode === autoSwitchOperationMode) {
+      return;
+    }
+
+    const previousMode = settings.operationMode;
+
+    setSettings((previous) => ({
+      ...previous,
+      operationMode: autoSwitchOperationMode
+    }));
+    setSettingsDraft((previous) => ({
+      ...previous,
+      operationMode: autoSwitchOperationMode
+    }));
+
+    void persistAppSettings({
+      ...settings,
+      operationMode: autoSwitchOperationMode
+    })
+      .then(() => {
+        appendConsole(`[mode] auto-switched to ${autoSwitchOperationMode}`);
+      })
+      .catch(async (error) => {
+        console.error(error);
+        setSettings((previous) => ({
+          ...previous,
+          operationMode: previousMode
+        }));
+        setSettingsDraft((previous) => ({
+          ...previous,
+          operationMode: previousMode
+        }));
+        await showMessage(t('settingsSaveFailed'), t('dialogErrorTitle'));
+      });
+  }, [autoSwitchOperationMode, settings, t]);
+
+  useEffect(() => {
     if (!isSettingsReady || !hasRestoredWorkspaceState) {
       return;
     }
@@ -1892,8 +1990,10 @@ export default function App() {
             title={t('appTitle')}
             isTaskRunning={isJobRunning}
             operationMode={settings.operationMode}
+            autoSwitchModeEnabled={settings.autoSwitchMode}
             isOperationModeDisabled={isOperationModeDisabled}
             onToggleOperationMode={() => void toggleOperationMode()}
+            onToggleAutoSwitchMode={() => void toggleAutoSwitchMode()}
             onOpenSettings={openSettings}
             onOpenAbout={() => setIsAboutOpen(true)}
             onMinimize={() => void runWindowAction('minimize')}
