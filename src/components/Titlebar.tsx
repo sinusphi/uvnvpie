@@ -65,72 +65,75 @@ export default function Titlebar({
         <span className="titlebar-title">{title}</span>
       </div>
 
-      <div className="titlebar-right" data-tauri-drag-region>
-        {isDirectMode ? (
-          <div className="titlebar-direct-warning" aria-hidden="true">
-            <span className="titlebar-direct-warning-text">
-              <span>Lock / Sync</span>
-              <span>unavailable</span>
-            </span>
-            <span className="titlebar-direct-warning-icon">
-              <svg viewBox="0 0 24 24">
-                <path d="M12.9 3.2a1 1 0 0 0-1.8 0L2.2 19.4c-.4.8.2 1.8 1.1 1.8h17.4c.9 0 1.5-1 1.1-1.8L12.9 3.2Zm-.9 5.5h0.1c.4 0 .8.3.8.8v5.3c0 .4-.4.8-.8.8H12c-.4 0-.8-.4-.8-.8V9.5c0-.5.4-.8.8-.8Zm.1 9.6a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
-              </svg>
-            </span>
-          </div>
-        ) : null}
-        <button
-          type="button"
-          className={`titlebar-mode-btn${isProjectMode ? ' is-project' : ' is-direct'}`}
-          onClick={onToggleOperationMode}
-          aria-pressed={isProjectMode}
-          aria-label={isProjectMode ? t('switchToDirectMode') : t('switchToProjectMode')}
-          disabled={isOperationModeDisabled}
-        >
-          {modeLabel}
-        </button>
-        <button
-          type="button"
-          className="titlebar-icon-btn"
-          aria-label={t('settings')}
-          onClick={onOpenSettings}
-        >
-          <GearIcon />
-        </button>
-        <button
-          type="button"
-          className="titlebar-icon-btn"
-          aria-label={t('about')}
-          onClick={onOpenAbout}
-        >
-          <InfoIcon />
-        </button>
+      <div className="titlebar-right">
+        <div className="titlebar-right-drag" data-tauri-drag-region />
+        <div className="titlebar-right-actions">
+          {isDirectMode ? (
+            <div className="titlebar-direct-warning" aria-hidden="true">
+              <span className="titlebar-direct-warning-text">
+                <span>Lock / Sync</span>
+                <span>unavailable</span>
+              </span>
+              <span className="titlebar-direct-warning-icon">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12.9 3.2a1 1 0 0 0-1.8 0L2.2 19.4c-.4.8.2 1.8 1.1 1.8h17.4c.9 0 1.5-1 1.1-1.8L12.9 3.2Zm-.9 5.5h0.1c.4 0 .8.3.8.8v5.3c0 .4-.4.8-.8.8H12c-.4 0-.8-.4-.8-.8V9.5c0-.5.4-.8.8-.8Zm.1 9.6a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
+                </svg>
+              </span>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className={`titlebar-mode-btn${isProjectMode ? ' is-project' : ' is-direct'}`}
+            onClick={onToggleOperationMode}
+            aria-pressed={isProjectMode}
+            aria-label={isProjectMode ? t('switchToDirectMode') : t('switchToProjectMode')}
+            disabled={isOperationModeDisabled}
+          >
+            {modeLabel}
+          </button>
+          <button
+            type="button"
+            className="titlebar-icon-btn"
+            aria-label={t('settings')}
+            onClick={onOpenSettings}
+          >
+            <GearIcon />
+          </button>
+          <button
+            type="button"
+            className="titlebar-icon-btn"
+            aria-label={t('about')}
+            onClick={onOpenAbout}
+          >
+            <InfoIcon />
+          </button>
 
-        <div className="window-controls">
-          <button
-            type="button"
-            className="window-control"
-            aria-label="Minimize window"
-            onClick={onMinimize}
-          >
-            <span />
-          </button>
-          <button
-            type="button"
-            className="window-control"
-            aria-label="Toggle maximize window"
-            onClick={onToggleMaximize}
-          >
-            <span className="square" />
-          </button>
-          <button
-            type="button"
-            className="window-control danger"
-            aria-label="Close window"
-            onClick={onClose}
-          >
-            <span className="close-mark" />
-          </button>
+          <div className="window-controls">
+            <button
+              type="button"
+              className="window-control"
+              aria-label="Minimize window"
+              onClick={onMinimize}
+            >
+              <span />
+            </button>
+            <button
+              type="button"
+              className="window-control"
+              aria-label="Toggle maximize window"
+              onClick={onToggleMaximize}
+            >
+              <span className="square" />
+            </button>
+            <button
+              type="button"
+              className="window-control danger"
+              aria-label="Close window"
+              onClick={onClose}
+            >
+              <span className="close-mark" />
+            </button>
+          </div>
         </div>
       </div>
 
