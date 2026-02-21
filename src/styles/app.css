@@ -426,23 +426,24 @@ button {
 }
 
 .titlebar-direct-warning {
+  --mode-warning: #ffd257;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 28px;
   margin-right: 2px;
-  color: var(--mode-warning);
+  color: var(--mode-warning, #ffd257);
 }
 
 .titlebar-direct-warning-text {
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
-  line-height: 1.1;
-  font-size: 0.55rem;
-  font-weight: 300;
+  line-height: 1.4;
+  font-size: 0.51rem;
+  font-weight: 200;
   letter-spacing: 0.03em;
-  color: var(--mode-warning);
+  color: var(--mode-warning, #ffd257);
   text-align: right;
   height: 28px;
 }
@@ -453,18 +454,18 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--mode-warning);
+  color: var(--mode-warning, #ffd257);
 }
 
 .titlebar-direct-warning-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 23px;
   fill: currentColor;
 }
 
 .titlebar-icon-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   fill: currentColor;
 }
 
