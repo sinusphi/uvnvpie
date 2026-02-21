@@ -15,8 +15,14 @@ import Tabs from './components/Tabs';
 import Titlebar from './components/Titlebar';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import {
+  fetchProjectFiles,
   fetchEnvironmentPackages,
   fetchEnvironments,
+  isValidProjectRoot,
+  runUvDirectInstall,
+  runUvDirectUninstall,
+  runUvDirectUpdateAll,
+  runUvDirectUpgrade,
   runUvAdd,
   runUvLock,
   runUvSync,
@@ -36,7 +42,16 @@ import {
   type SavedWorkspaceTab,
   type Language
 } from './state/store';
-import type { EnvironmentItem, PackageItem, UvCommandResult } from './types/domain';
+import type {
+  DirectOperationTarget,
+  EnvironmentItem,
+  OperationTarget,
+  PackageItem,
+  ProjectFileNode,
+  ProjectItem,
+  ProjectOperationTarget,
+  UvCommandResult
+} from './types/domain';
 
 type MainTab = 'packages' | 'dependencyTree' | 'requirements';
 
@@ -46,7 +61,15 @@ interface WorkspaceTabState {
   envRootDir: string;
   environments: EnvironmentItem[];
   selectedEnvironmentId: string;
-  isExpanded: boolean;
+  projects: ProjectItem[];
+  selectedProjectId: string;
+  projectFileTree: ProjectFileNode[];
+  expandedEnvironmentNodeIds: string[];
+  expandedProjectNodeIds: string[];
+  isProjectExpanded: boolean;
+  isEnvironmentExpanded: boolean;
+  showInProjects: boolean;
+  showInEnvironments: boolean;
 }
 
 const INITIAL_CONSOLE_LINES = [
@@ -92,8 +115,41 @@ function getFolderName(path: string): string {
   return parts[parts.length - 1] ?? normalized;
 }
 
+function buildPyprojectPath(rootDir: string): string {
+  const normalized = rootDir.trim().replace(/[\\/]+$/, '');
+
+  if (!normalized) {
+    return '';
+  }
+
+  return `${normalized}/pyproject.toml`;
+}
+
+function createDefaultProjectForWorkspace(workspaceId: string, workspaceName: string, envRootDir: string): ProjectItem | null {
+  const rootDir = envRootDir.trim();
+  if (!rootDir) {
+    return null;
+  }
+
+  return {
+    id: `project-${workspaceId}`,
+    name: workspaceName,
+    rootDir,
+    pyprojectPath: buildPyprojectPath(rootDir)
+  };
+}
+
 function getNextOperationMode(mode: OperationMode): OperationMode {
   return mode === 'project' ? 'direct' : 'project';
+}
+
+function normalizeFolderSelection(selection: string | string[] | null): string[] {
+  const selectedFolders = (Array.isArray(selection) ? selection : [selection])
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  return Array.from(new Set(selectedFolders));
 }
 
 export default function App() {
@@ -104,6 +160,7 @@ export default function App() {
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isSettingsReady, setIsSettingsReady] = useState(false);
+  const [hasRestoredWorkspaceState, setHasRestoredWorkspaceState] = useState(false);
 
   const [workspaceTabs, setWorkspaceTabs] = useState<WorkspaceTabState[]>([]);
   const [activeWorkspaceTabId, setActiveWorkspaceTabId] = useState('');
@@ -125,24 +182,49 @@ export default function App() {
   const jobTokenRef = useRef(0);
   const workspaceCounterRef = useRef(0);
   const closePromptActiveRef = useRef(false);
+  const allowNativeCloseRef = useRef(false);
   const requestWindowCloseRef = useRef<() => Promise<void>>(async () => {});
   const closeRequestedUnlistenRef = useRef<(() => void) | null>(null);
 
   const { t } = useI18n(language);
 
-  const createWorkspaceTab = (envRootDir: string, nameOverride = '', isExpanded = false): WorkspaceTabState => {
+  const createWorkspaceTab = (
+    envRootDir: string,
+    nameOverride = '',
+    defaultExpanded = false,
+    options: {
+      seedProject?: boolean;
+      initialProjectExpanded?: boolean;
+      initialEnvironmentExpanded?: boolean;
+      showInProjects?: boolean;
+      showInEnvironments?: boolean;
+    } = {}
+  ): WorkspaceTabState => {
     workspaceCounterRef.current += 1;
+    const workspaceId = `workspace-${workspaceCounterRef.current}`;
 
     const folderName = getFolderName(envRootDir);
     const normalizedName = nameOverride.trim();
+    const workspaceName = normalizedName || folderName || t('folderFallbackName');
+    const defaultProject = options.seedProject
+      ? createDefaultProjectForWorkspace(workspaceId, workspaceName, envRootDir)
+      : null;
 
     return {
-      id: `workspace-${workspaceCounterRef.current}`,
-      name: normalizedName || folderName || t('folderFallbackName'),
+      id: workspaceId,
+      name: workspaceName,
       envRootDir,
       environments: [],
       selectedEnvironmentId: '',
-      isExpanded
+      projects: defaultProject ? [defaultProject] : [],
+      selectedProjectId: defaultProject?.id ?? '',
+      projectFileTree: [],
+      expandedEnvironmentNodeIds: [],
+      expandedProjectNodeIds: [],
+      isProjectExpanded: options.initialProjectExpanded ?? defaultExpanded,
+      isEnvironmentExpanded: options.initialEnvironmentExpanded ?? defaultExpanded,
+      showInProjects: options.showInProjects ?? true,
+      showInEnvironments: options.showInEnvironments ?? true
     };
   };
 
@@ -158,23 +240,29 @@ export default function App() {
     timersRef.current = [];
   };
 
-  const loadWorkspaceEnvironments = async (tabId: string, envRootDir: string) => {
+  const loadWorkspaceEnvironments = async (
+    tabId: string,
+    envRootDir: string,
+    options: { refreshPackages?: boolean } = {}
+  ): Promise<EnvironmentItem | null> => {
     const normalizedRootDir = envRootDir.trim();
 
     try {
       const nextEnvironments = await fetchEnvironments(normalizedRootDir);
+      const currentTab = workspaceTabs.find((tab) => tab.id === tabId) ?? null;
+      const selectedEnvironmentId = nextEnvironments.some(
+        (environment) => environment.id === currentTab?.selectedEnvironmentId
+      )
+        ? currentTab?.selectedEnvironmentId ?? ''
+        : nextEnvironments[0]?.id ?? '';
+      const selectedEnvironment =
+        nextEnvironments.find((environment) => environment.id === selectedEnvironmentId) ?? null;
 
       setWorkspaceTabs((previous) =>
         previous.map((tab) => {
           if (tab.id !== tabId) {
             return tab;
           }
-
-          const selectedEnvironmentId = nextEnvironments.some(
-            (environment) => environment.id === tab.selectedEnvironmentId
-          )
-            ? tab.selectedEnvironmentId
-            : nextEnvironments[0]?.id ?? '';
 
           return {
             ...tab,
@@ -192,6 +280,22 @@ export default function App() {
       appendConsole(
         `[data] loaded ${nextEnvironments.length} environment(s)${normalizedRootDir ? ` from ${normalizedRootDir}` : ''}`
       );
+
+      if (options.refreshPackages && selectedEnvironment) {
+        try {
+          const nextPackages = await fetchEnvironmentPackages(selectedEnvironment.interpreterPath);
+          setPackagesByEnvironment((previous) => ({
+            ...previous,
+            [selectedEnvironment.id]: nextPackages
+          }));
+          appendConsole(`[data] loaded ${nextPackages.length} package(s) for ${selectedEnvironment.name}`);
+        } catch (error) {
+          console.error(error);
+          appendConsole(`[error] failed to load packages for ${selectedEnvironment.name}`);
+        }
+      }
+
+      return selectedEnvironment;
     } catch (error) {
       console.error(error);
 
@@ -216,7 +320,88 @@ export default function App() {
 
       appendConsole('[error] failed to load environment list');
       await showMessage('Failed to load environments.', 'uvnvpie');
+      return null;
     }
+  };
+
+  const syncWorkspaceProjectState = async (
+    tabId: string,
+    envRootDir: string,
+    options: { showInvalidMessage?: boolean } = {}
+  ): Promise<boolean> => {
+    const normalizedRootDir = envRootDir.trim();
+
+    if (!normalizedRootDir) {
+      setWorkspaceTabs((previous) =>
+        previous.map((tab) => {
+          if (tab.id !== tabId) {
+            return tab;
+          }
+
+          return {
+            ...tab,
+            projects: [],
+            selectedProjectId: '',
+            projectFileTree: [],
+            expandedProjectNodeIds: []
+          };
+        })
+      );
+      return false;
+    }
+
+    let isValid = false;
+    let projectFileTree: ProjectFileNode[] = [];
+
+    try {
+      isValid = await isValidProjectRoot(normalizedRootDir);
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : `Failed to validate project root: ${String(error ?? 'Unknown error')}`;
+      appendConsole(`[error] ${messageText}`);
+      if (options.showInvalidMessage) {
+        await showMessage(messageText, 'uvnvpie');
+      }
+      return false;
+    }
+
+    if (isValid) {
+      try {
+        projectFileTree = await fetchProjectFiles(normalizedRootDir);
+        appendConsole(
+          `[data] loaded ${projectFileTree.length} project root entr${projectFileTree.length === 1 ? 'y' : 'ies'} from ${normalizedRootDir}`
+        );
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : `Failed to read project tree: ${String(error ?? 'Unknown error')}`;
+        appendConsole(`[error] ${messageText}`);
+        if (options.showInvalidMessage) {
+          await showMessage(messageText, 'uvnvpie');
+        }
+      }
+    }
+
+    setWorkspaceTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.id !== tabId) {
+          return tab;
+        }
+
+        const project = isValid ? createDefaultProjectForWorkspace(tab.id, tab.name, normalizedRootDir) : null;
+
+        return {
+          ...tab,
+          projects: project ? [project] : [],
+          selectedProjectId: project?.id ?? '',
+          projectFileTree: project ? projectFileTree : [],
+          expandedProjectNodeIds: project ? [normalizedRootDir] : []
+        };
+      })
+    );
+
+    if (!isValid && options.showInvalidMessage) {
+      await showMessage(`No pyproject.toml found in:\n${normalizedRootDir}`, 'Invalid project folder');
+    }
+
+    return isValid;
   };
 
   const activeWorkspace = useMemo(() => {
@@ -277,11 +462,50 @@ export default function App() {
     return packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
   }, [packages, selectedPackageId]);
 
+  const selectedProject = useMemo(() => {
+    if (!activeWorkspace) {
+      return null;
+    }
+
+    return activeWorkspace.projects.find((project) => project.id === activeWorkspace.selectedProjectId) ?? null;
+  }, [activeWorkspace]);
+
   const isProjectMode = settings.operationMode === 'project';
-  const activeProjectDir = (activeWorkspace?.envRootDir ?? '').trim();
+  const isManagedProjectContext = selectedProject !== null;
+  const activeProjectDir = (selectedProject?.rootDir ?? '').trim();
   const activeInterpreterPath = (selectedEnvironment?.interpreterPath ?? '').trim();
+  const activeDirectTarget = useMemo<DirectOperationTarget | null>(() => {
+    if (!activeWorkspace || !selectedEnvironment || !activeInterpreterPath) {
+      return null;
+    }
+
+    return {
+      mode: 'direct',
+      workspaceId: activeWorkspace.id,
+      environmentId: selectedEnvironment.id,
+      interpreterPath: activeInterpreterPath
+    };
+  }, [activeWorkspace, selectedEnvironment, activeInterpreterPath]);
+
+  const activeProjectTarget = useMemo<ProjectOperationTarget | null>(() => {
+    if (!activeWorkspace || !selectedProject || !activeProjectDir) {
+      return null;
+    }
+
+    return {
+      mode: 'project',
+      workspaceId: activeWorkspace.id,
+      projectId: selectedProject.id,
+      projectDir: activeProjectDir
+    };
+  }, [activeWorkspace, selectedProject, activeProjectDir]);
+
+  const activeOperationTarget = useMemo<OperationTarget | null>(() => {
+    return isProjectMode ? activeProjectTarget : activeDirectTarget;
+  }, [isProjectMode, activeProjectTarget, activeDirectTarget]);
+
   const normalizedUvBinaryPath = settings.uvBinaryPath.trim();
-  const hasModeActionTarget = isProjectMode ? activeProjectDir.length > 0 : activeInterpreterPath.length > 0;
+  const hasModeActionTarget = activeOperationTarget !== null;
   const toolbarModeActionsDisabled = isJobRunning || !hasModeActionTarget;
   const toolbarPackageActionsDisabled = toolbarModeActionsDisabled || !selectedPackage;
   const projectOnlyActionsDisabled = isJobRunning || !activeProjectDir || !isProjectMode;
@@ -307,7 +531,11 @@ export default function App() {
       .map((tab) => ({
         envRootDir: tab.envRootDir.trim(),
         name: tab.name.trim(),
-        isExpanded: tab.isExpanded
+        isExpanded: tab.isProjectExpanded || tab.isEnvironmentExpanded,
+        isProjectExpanded: tab.isProjectExpanded,
+        isEnvironmentExpanded: tab.isEnvironmentExpanded,
+        showInProjects: tab.showInProjects,
+        showInEnvironments: tab.showInEnvironments
       }))
       .filter((tab) => {
         if (!tab.envRootDir || unique.has(tab.envRootDir)) {
@@ -321,12 +549,19 @@ export default function App() {
 
   const closeWindowNow = async () => {
     const appWindow = getCurrentWindow();
+    allowNativeCloseRef.current = true;
+
     if (closeRequestedUnlistenRef.current) {
       closeRequestedUnlistenRef.current();
       closeRequestedUnlistenRef.current = null;
     }
 
-    await appWindow.close();
+    try {
+      await appWindow.close();
+    } catch (error) {
+      allowNativeCloseRef.current = false;
+      throw error;
+    }
   };
 
   const requestWindowClose = async () => {
@@ -535,7 +770,150 @@ export default function App() {
     }
   };
 
-  const openWorkspaceTab = async () => {
+  const applyOpenedRootFolders = async (
+    rootDirs: string[],
+    options: {
+      requireValidProjectRoot: boolean;
+      targetTree: 'projects' | 'environments';
+    }
+  ) => {
+    if (rootDirs.length === 0) {
+      return;
+    }
+
+    const existingByRootDir = new Map(workspaceTabs.map((tab) => [tab.envRootDir, tab]));
+    const expandedExistingIds = new Set<string>();
+    const newTabs: WorkspaceTabState[] = [];
+    const invalidProjectRoots: string[] = [];
+    const touchedTabs: Array<{ id: string; envRootDir: string }> = [];
+    let nextActiveTabId = '';
+
+    for (const envRootDir of rootDirs) {
+      if (options.requireValidProjectRoot) {
+        let validProjectRoot = false;
+
+        try {
+          validProjectRoot = await isValidProjectRoot(envRootDir);
+        } catch (error) {
+          const messageText = error instanceof Error ? error.message : String(error ?? 'Unknown validation error');
+          appendConsole(`[error] ${messageText}`);
+        }
+
+        if (!validProjectRoot) {
+          invalidProjectRoots.push(envRootDir);
+          continue;
+        }
+      }
+
+      const existingTab = existingByRootDir.get(envRootDir);
+
+      if (existingTab) {
+        expandedExistingIds.add(existingTab.id);
+        touchedTabs.push({
+          id: existingTab.id,
+          envRootDir: existingTab.envRootDir
+        });
+        nextActiveTabId = existingTab.id;
+        continue;
+      }
+
+      const shouldExpandByDefault = workspaceTabs.length === 0 && newTabs.length === 0;
+      const nextTab = createWorkspaceTab(envRootDir, '', shouldExpandByDefault, {
+        seedProject: options.requireValidProjectRoot,
+        initialProjectExpanded:
+          options.targetTree === 'projects' ? shouldExpandByDefault : false,
+        initialEnvironmentExpanded:
+          options.targetTree === 'environments' ? shouldExpandByDefault : false,
+        showInProjects: options.targetTree === 'projects',
+        showInEnvironments: options.targetTree === 'environments'
+      });
+
+      newTabs.push(nextTab);
+      touchedTabs.push({
+        id: nextTab.id,
+        envRootDir: nextTab.envRootDir
+      });
+      existingByRootDir.set(envRootDir, nextTab);
+      nextActiveTabId = nextTab.id;
+    }
+
+    if (options.requireValidProjectRoot && invalidProjectRoots.length > 0) {
+      appendConsole(
+        `[warn] skipped ${invalidProjectRoots.length} folder(s) without pyproject.toml: ${invalidProjectRoots.join(', ')}`
+      );
+      await showMessage(
+        `Only valid project roots can be opened.\n\nMissing pyproject.toml:\n${invalidProjectRoots.join('\n')}`,
+        'Invalid project folder'
+      );
+    }
+
+    if (expandedExistingIds.size > 0) {
+      setWorkspaceTabs((previous) =>
+        previous.map((tab) => {
+          if (!expandedExistingIds.has(tab.id)) {
+            return tab;
+          }
+
+          if (options.targetTree === 'projects') {
+            return {
+              ...tab,
+              isProjectExpanded: true,
+              showInProjects: true
+            };
+          }
+
+          return {
+            ...tab,
+            isEnvironmentExpanded: true,
+            showInEnvironments: true
+          };
+        })
+      );
+    }
+
+    if (newTabs.length > 0) {
+      setWorkspaceTabs((previous) => [...previous, ...newTabs]);
+      setMainTabByWorkspace((previous) => ({
+        ...previous,
+        ...Object.fromEntries(newTabs.map((tab) => [tab.id, 'packages'] as const))
+      }));
+      setSelectedPackageIdByWorkspace((previous) => ({
+        ...previous,
+        ...Object.fromEntries(newTabs.map((tab) => [tab.id, ''] as const))
+      }));
+    }
+
+    for (const tab of touchedTabs) {
+      void loadWorkspaceEnvironments(tab.id, tab.envRootDir, {
+        refreshPackages: options.targetTree === 'projects' && tab.id === nextActiveTabId
+      });
+      if (options.targetTree === 'projects') {
+        void syncWorkspaceProjectState(tab.id, tab.envRootDir);
+      }
+    }
+
+    if (nextActiveTabId) {
+      setActiveWorkspaceTabId(nextActiveTabId);
+    }
+  };
+
+  const openProjectRootFolders = async () => {
+    try {
+      const selection = await open({
+        title: t('pickProjectFolderTitle'),
+        directory: true,
+        multiple: true
+      });
+
+      const rootDirs = normalizeFolderSelection(selection);
+      await applyOpenedRootFolders(rootDirs, { requireValidProjectRoot: true, targetTree: 'projects' });
+    } catch (error) {
+      console.error(error);
+      await showMessage(t('settingsLoadFailed'), t('dialogErrorTitle'));
+    }
+  };
+
+  const openEnvironmentRootFolders = async () => {
     try {
       const selection = await open({
         title: t('pickWorkspaceFolderTitle'),
@@ -543,72 +921,8 @@ export default function App() {
         multiple: true
       });
 
-      const selectedFolders = (Array.isArray(selection) ? selection : [selection])
-        .filter((value): value is string => typeof value === 'string')
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0);
-      const uniqueFolders = Array.from(new Set(selectedFolders));
-
-      if (uniqueFolders.length === 0) {
-        return;
-      }
-
-      const existingByRootDir = new Map(workspaceTabs.map((tab) => [tab.envRootDir, tab]));
-      const expandedExistingIds = new Set<string>();
-      const newTabs: WorkspaceTabState[] = [];
-      let nextActiveTabId = '';
-
-      for (const envRootDir of uniqueFolders) {
-        const existingTab = existingByRootDir.get(envRootDir);
-
-        if (existingTab) {
-          expandedExistingIds.add(existingTab.id);
-          nextActiveTabId = existingTab.id;
-          continue;
-        }
-
-        const shouldExpandByDefault = workspaceTabs.length === 0 && newTabs.length === 0;
-        const nextTab = createWorkspaceTab(envRootDir, '', shouldExpandByDefault);
-        newTabs.push(nextTab);
-        existingByRootDir.set(envRootDir, nextTab);
-        nextActiveTabId = nextTab.id;
-      }
-
-      if (expandedExistingIds.size > 0) {
-        setWorkspaceTabs((previous) =>
-          previous.map((tab) => {
-            if (!expandedExistingIds.has(tab.id)) {
-              return tab;
-            }
-
-            return {
-              ...tab,
-              isExpanded: true
-            };
-          })
-        );
-
-      }
-
-      if (newTabs.length > 0) {
-        setWorkspaceTabs((previous) => [...previous, ...newTabs]);
-        setMainTabByWorkspace((previous) => ({
-          ...previous,
-          ...Object.fromEntries(newTabs.map((tab) => [tab.id, 'packages'] as const))
-        }));
-        setSelectedPackageIdByWorkspace((previous) => ({
-          ...previous,
-          ...Object.fromEntries(newTabs.map((tab) => [tab.id, ''] as const))
-        }));
-
-        for (const tab of newTabs) {
-          void loadWorkspaceEnvironments(tab.id, tab.envRootDir);
-        }
-      }
-
-      if (nextActiveTabId) {
-        setActiveWorkspaceTabId(nextActiveTabId);
-      }
+      const rootDirs = normalizeFolderSelection(selection);
+      await applyOpenedRootFolders(rootDirs, { requireValidProjectRoot: false, targetTree: 'environments' });
     } catch (error) {
       console.error(error);
       await showMessage(t('settingsLoadFailed'), t('dialogErrorTitle'));
@@ -619,7 +933,7 @@ export default function App() {
     setActiveWorkspaceTabId(workspaceId);
   };
 
-  const handleToggleWorkspaceExpanded = (workspaceId: string) => {
+  const handleToggleProjectWorkspaceExpanded = (workspaceId: string) => {
     setWorkspaceTabs((previous) =>
       previous.map((tab) => {
         if (tab.id !== workspaceId) {
@@ -628,7 +942,50 @@ export default function App() {
 
         return {
           ...tab,
-          isExpanded: !tab.isExpanded
+          isProjectExpanded: !tab.isProjectExpanded
+        };
+      })
+    );
+  };
+
+  const handleToggleProjectDirectory = (workspaceId: string, nodePath: string) => {
+    if (!nodePath.trim()) {
+      return;
+    }
+
+    setActiveWorkspaceTabId(workspaceId);
+    setWorkspaceTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.id !== workspaceId) {
+          return tab;
+        }
+
+        const expanded = new Set(tab.expandedProjectNodeIds);
+        if (expanded.has(nodePath)) {
+          expanded.delete(nodePath);
+        } else {
+          expanded.add(nodePath);
+        }
+
+        return {
+          ...tab,
+          isProjectExpanded: true,
+          expandedProjectNodeIds: Array.from(expanded)
+        };
+      })
+    );
+  };
+
+  const handleToggleEnvironmentWorkspaceExpanded = (workspaceId: string) => {
+    setWorkspaceTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.id !== workspaceId) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          isEnvironmentExpanded: !tab.isEnvironmentExpanded
         };
       })
     );
@@ -645,7 +1002,24 @@ export default function App() {
         return {
           ...tab,
           selectedEnvironmentId: environmentId,
-          isExpanded: true
+          isEnvironmentExpanded: true
+        };
+      })
+    );
+  };
+
+  const handleSelectProject = (workspaceId: string, projectId: string) => {
+    setActiveWorkspaceTabId(workspaceId);
+    setWorkspaceTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.id !== workspaceId) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          selectedProjectId: projectId,
+          isProjectExpanded: true
         };
       })
     );
@@ -696,16 +1070,22 @@ export default function App() {
   };
 
   const refreshSelectedEnvironmentPackages = async () => {
-    if (!selectedEnvironment) {
+    let environment = selectedEnvironment;
+
+    if (!environment && activeWorkspace) {
+      environment = await loadWorkspaceEnvironments(activeWorkspace.id, activeWorkspace.envRootDir);
+    }
+
+    if (!environment) {
       return;
     }
 
-    const nextPackages = await fetchEnvironmentPackages(selectedEnvironment.interpreterPath);
+    const nextPackages = await fetchEnvironmentPackages(environment.interpreterPath);
     setPackagesByEnvironment((previous) => ({
       ...previous,
-      [selectedEnvironment.id]: nextPackages
+      [environment.id]: nextPackages
     }));
-    appendConsole(`[data] loaded ${nextPackages.length} package(s) for ${selectedEnvironment.name}`);
+    appendConsole(`[data] loaded ${nextPackages.length} package(s) for ${environment.name}`);
   };
 
   const runProjectAction = async (
@@ -714,6 +1094,41 @@ export default function App() {
     options: { refreshPackages?: boolean } = {}
   ) => {
     if (isJobRunning || !activeProjectDir) {
+      return;
+    }
+
+    setIsJobRunning(true);
+    appendConsole(`[job] ${actionLabel}`);
+
+    try {
+      for (const step of steps) {
+        appendConsole(`[step] ${step.label}`);
+        const result = await step.run();
+        appendUvCommandResult(result);
+
+        if (!result.success) {
+          throw new Error(result.stderr || `Command failed with exit code ${result.exitCode}.`);
+        }
+      }
+
+      if (options.refreshPackages) {
+        await refreshSelectedEnvironmentPackages();
+      }
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error || 'Unknown command error');
+      appendConsole(`[error] ${actionLabel} failed: ${messageText}`);
+      await showMessage(messageText, 'uvnvpie');
+    } finally {
+      setIsJobRunning(false);
+    }
+  };
+
+  const runDirectAction = async (
+    actionLabel: string,
+    steps: Array<{ label: string; run: () => Promise<UvCommandResult> }>,
+    options: { refreshPackages?: boolean } = {}
+  ) => {
+    if (isJobRunning || !activeInterpreterPath) {
       return;
     }
 
@@ -758,20 +1173,8 @@ export default function App() {
     return requirement;
   };
 
-  const announceDirectModeAction = (actionLabel: string) => {
-    const interpreterHint = activeInterpreterPath || t('notAvailable');
-    appendConsole(`[mode] direct action requested: ${actionLabel}`);
-    appendConsole(`[mode] target interpreter: ${interpreterHint}`);
-    appendConsole('[mode] direct command execution will be wired in phase 3.2/4');
-  };
-
   const handleInstallPackage = async () => {
     if (toolbarModeActionsDisabled) {
-      return;
-    }
-
-    if (!isProjectMode) {
-      announceDirectModeAction('Install Package');
       return;
     }
 
@@ -780,15 +1183,36 @@ export default function App() {
       return;
     }
 
-    await runProjectAction('Install Package', [
-      {
-        label: `uv add ${requirement}`,
-        run: () =>
-          runUvAdd(activeProjectDir, requirement, {
-            uvBinaryPath: normalizedUvBinaryPath
-          })
-      }
-    ], { refreshPackages: true });
+    if (!isProjectMode) {
+      await runDirectAction(
+        'Install Package',
+        [
+          {
+            label: `uv pip install ${requirement}`,
+            run: () =>
+              runUvDirectInstall(activeInterpreterPath, requirement, {
+                uvBinaryPath: normalizedUvBinaryPath
+              })
+          }
+        ],
+        { refreshPackages: true }
+      );
+      return;
+    }
+
+    await runProjectAction(
+      'Install Package',
+      [
+        {
+          label: `uv add ${requirement}`,
+          run: () =>
+            runUvAdd(activeProjectDir, requirement, {
+              uvBinaryPath: normalizedUvBinaryPath
+            })
+        }
+      ],
+      { refreshPackages: true }
+    );
   };
 
   const handleUpgradePackage = async () => {
@@ -797,7 +1221,20 @@ export default function App() {
     }
 
     if (!isProjectMode) {
-      announceDirectModeAction(`Upgrade Package ${selectedPackage.name}`);
+      const packageName = selectedPackage.name;
+      await runDirectAction(
+        `Upgrade Package ${packageName}`,
+        [
+          {
+            label: `uv pip install --upgrade ${packageName}`,
+            run: () =>
+              runUvDirectUpgrade(activeInterpreterPath, packageName, {
+                uvBinaryPath: normalizedUvBinaryPath
+              })
+          }
+        ],
+        { refreshPackages: true }
+      );
       return;
     }
 
@@ -830,7 +1267,20 @@ export default function App() {
     }
 
     if (!isProjectMode) {
-      announceDirectModeAction(`Uninstall Package ${selectedPackage.name}`);
+      const packageName = selectedPackage.name;
+      await runDirectAction(
+        `Uninstall Package ${packageName}`,
+        [
+          {
+            label: `uv pip uninstall ${packageName}`,
+            run: () =>
+              runUvDirectUninstall(activeInterpreterPath, packageName, {
+                uvBinaryPath: normalizedUvBinaryPath
+              })
+          }
+        ],
+        { refreshPackages: true }
+      );
       return;
     }
 
@@ -856,7 +1306,19 @@ export default function App() {
     }
 
     if (!isProjectMode) {
-      announceDirectModeAction('Update All');
+      await runDirectAction(
+        'Update All',
+        [
+          {
+            label: 'uv pip list --outdated && uv pip install --upgrade <outdated>',
+            run: () =>
+              runUvDirectUpdateAll(activeInterpreterPath, {
+                uvBinaryPath: normalizedUvBinaryPath
+              })
+          }
+        ],
+        { refreshPackages: true }
+      );
       return;
     }
 
@@ -975,9 +1437,15 @@ export default function App() {
           return tab;
         }
 
+        const nextName = nextLabel || getFolderName(tab.envRootDir) || t('folderFallbackName');
+
         return {
           ...tab,
-          name: nextLabel || getFolderName(tab.envRootDir) || t('folderFallbackName')
+          name: nextName,
+          projects: tab.projects.map((project) => ({
+            ...project,
+            name: nextName
+          }))
         };
       })
     );
@@ -1103,6 +1571,7 @@ export default function App() {
       return;
     }
 
+    setHasRestoredWorkspaceState(false);
     let alive = true;
 
     const resetWorkspaceState = () => {
@@ -1124,7 +1593,12 @@ export default function App() {
         }
 
         if (savedTabs.length === 0) {
-          const initialTab = createWorkspaceTab(settings.envRootDir.trim(), '', true);
+          const initialTab = createWorkspaceTab(settings.envRootDir.trim(), '', true, {
+            initialProjectExpanded: false,
+            initialEnvironmentExpanded: true,
+            showInProjects: false,
+            showInEnvironments: true
+          });
 
           setWorkspaceTabs([initialTab]);
           setActiveWorkspaceTabId(initialTab.id);
@@ -1135,10 +1609,21 @@ export default function App() {
           setEditingWorkspaceName('');
 
           void loadWorkspaceEnvironments(initialTab.id, initialTab.envRootDir);
+          if (initialTab.showInProjects) {
+            void syncWorkspaceProjectState(initialTab.id, initialTab.envRootDir);
+          }
+          setHasRestoredWorkspaceState(true);
           return;
         }
 
-        const restoredTabs = savedTabs.map((tab) => createWorkspaceTab(tab.envRootDir, tab.name, tab.isExpanded));
+        const restoredTabs = savedTabs.map((tab) =>
+          createWorkspaceTab(tab.envRootDir, tab.name, tab.isExpanded, {
+            initialProjectExpanded: tab.isProjectExpanded,
+            initialEnvironmentExpanded: tab.isEnvironmentExpanded,
+            showInProjects: tab.showInProjects,
+            showInEnvironments: tab.showInEnvironments
+          })
+        );
 
         setWorkspaceTabs(restoredTabs);
         setActiveWorkspaceTabId(restoredTabs[0]?.id ?? '');
@@ -1151,9 +1636,13 @@ export default function App() {
         setPackagesByEnvironment({});
         setEditingWorkspaceTabId(null);
         setEditingWorkspaceName('');
+        setHasRestoredWorkspaceState(true);
 
         for (const tab of restoredTabs) {
           void loadWorkspaceEnvironments(tab.id, tab.envRootDir);
+          if (tab.showInProjects) {
+            void syncWorkspaceProjectState(tab.id, tab.envRootDir);
+          }
         }
       } catch (error) {
         console.error(error);
@@ -1161,6 +1650,7 @@ export default function App() {
 
         if (alive) {
           resetWorkspaceState();
+          setHasRestoredWorkspaceState(true);
         }
       }
     };
@@ -1171,6 +1661,29 @@ export default function App() {
       alive = false;
     };
   }, [isSettingsReady]);
+
+  useEffect(() => {
+    if (!isSettingsReady || !hasRestoredWorkspaceState) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const tabsToPersist = settings.alwaysSaveTabs ? collectWorkspaceTabsForPersistence() : [];
+      void persistSavedWorkspaceTabs(tabsToPersist).catch((error) => {
+        console.error('failed to persist workspace tabs', error);
+      });
+    }, settings.autoSaveDebounceMs);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    hasRestoredWorkspaceState,
+    isSettingsReady,
+    settings.alwaysSaveTabs,
+    settings.autoSaveDebounceMs,
+    workspaceTabs
+  ]);
 
   useEffect(() => {
     if (!selectedEnvironment) {
@@ -1320,6 +1833,10 @@ export default function App() {
 
     void appWindow
       .onCloseRequested(async (event: CloseRequestedEvent) => {
+        if (allowNativeCloseRef.current) {
+          return;
+        }
+
         event.preventDefault();
         await requestWindowCloseRef.current();
       })
@@ -1390,16 +1907,19 @@ export default function App() {
               workspaces={workspaceTabs}
               activeWorkspaceId={activeWorkspace?.id ?? ''}
               onSelectWorkspace={handleSelectWorkspace}
-              onToggleWorkspaceExpanded={handleToggleWorkspaceExpanded}
+              onToggleProjectWorkspaceExpanded={handleToggleProjectWorkspaceExpanded}
+              onToggleProjectDirectory={handleToggleProjectDirectory}
+              onToggleEnvironmentWorkspaceExpanded={handleToggleEnvironmentWorkspaceExpanded}
               onSelectEnvironment={handleSelectEnvironment}
               onCreateEnvironment={() => appendConsole(t('createEnvironmentPending'))}
-              onOpenWorkspace={() => void openWorkspaceTab()}
+              onOpenProjectRoot={() => void openProjectRootFolders()}
+              onOpenEnvironmentRoot={() => void openEnvironmentRootFolders()}
               t={t}
             />
 
             <main className={`main-content${isConsoleCollapsed ? ' console-collapsed' : ''}`}>
               <section className="top-panels">
-                <HeaderPanel environment={displayedEnvironment} t={t} />
+                <HeaderPanel environment={displayedEnvironment} isManagedProject={isManagedProjectContext} t={t} />
                 <InterpreterCard pythonVersion={displayedEnvironment.pythonVersion} uvVersion={uvVersion} t={t} />
               </section>
 
