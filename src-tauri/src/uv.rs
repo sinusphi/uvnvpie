@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -27,6 +28,15 @@ pub struct PackageItem {
     pub summary: String,
     pub license: String,
     pub home_page: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyGraphPackage {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,6 +99,19 @@ struct RawOutdatedPackageItem {
     name: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawDependencyGraphItem {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    dependencies: Vec<String>,
+}
+
 const PACKAGE_QUERY_SCRIPT: &str = r#"
 import json
 import importlib.metadata as md
@@ -126,6 +149,52 @@ for distribution in md.distributions():
 
 packages.sort(key=lambda item: item["name"].lower())
 print(json.dumps(packages))
+"#;
+
+const DEPENDENCY_TREE_QUERY_SCRIPT: &str = r#"
+import json
+import re
+import importlib.metadata as md
+
+NAME_RE = re.compile(r'^\s*([A-Za-z0-9][A-Za-z0-9._-]*)')
+
+def normalize_name(value):
+    return re.sub(r'[-_.]+', '-', (value or '').strip()).lower()
+
+def parse_requirement_name(requirement):
+    if not isinstance(requirement, str):
+        return ''
+    match = NAME_RE.match(requirement)
+    if not match:
+        return ''
+    return normalize_name(match.group(1))
+
+nodes = []
+for distribution in md.distributions():
+    metadata = distribution.metadata
+    raw_name = (metadata.get('Name') or '').strip() or (getattr(distribution, 'name', '') or '').strip()
+    if not raw_name:
+        continue
+
+    package_id = normalize_name(raw_name)
+    dependencies = []
+
+    for requirement in metadata.get_all('Requires-Dist') or []:
+        dependency_id = parse_requirement_name(requirement)
+        if dependency_id and dependency_id != package_id:
+            dependencies.append(dependency_id)
+
+    nodes.append(
+        {
+            'id': package_id,
+            'name': raw_name,
+            'version': (distribution.version or '').strip(),
+            'dependencies': sorted(set(dependencies)),
+        }
+    )
+
+nodes.sort(key=lambda item: item['name'].lower())
+print(json.dumps(nodes))
 "#;
 
 const UV_COMMAND_OUTPUT_EVENT: &str = "uv-command-output";
@@ -538,6 +607,72 @@ pub fn list_environment_packages(interpreter_path: String) -> Result<Vec<Package
     Ok(packages)
 }
 
+pub fn list_environment_dependency_graph(
+    interpreter_path: String,
+) -> Result<Vec<DependencyGraphPackage>, String> {
+    let interpreter = validate_interpreter_path(interpreter_path)?;
+
+    let output = Command::new(&interpreter)
+        .args(["-c", DEPENDENCY_TREE_QUERY_SCRIPT])
+        .output()
+        .map_err(|error| {
+            format!(
+                "Failed to run interpreter '{}': {error}",
+                interpreter.display()
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Failed to read dependency graph from '{}': {}",
+            interpreter.display(),
+            stderr.trim()
+        ));
+    }
+
+    let raw_json = String::from_utf8_lossy(&output.stdout);
+    if raw_json.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let raw_items: Vec<RawDependencyGraphItem> = serde_json::from_str(&raw_json)
+        .map_err(|error| format!("Failed to parse dependency graph JSON: {error}"))?;
+
+    let mut items = raw_items
+        .into_iter()
+        .map(|item| {
+            let name = item.name.trim().to_string();
+            let fallback_id = normalize_package_id(&name);
+            let id = normalize_package_id(if item.id.trim().is_empty() {
+                &fallback_id
+            } else {
+                &item.id
+            });
+
+            let dependencies = item
+                .dependencies
+                .into_iter()
+                .map(|entry| normalize_package_id(&entry))
+                .filter(|entry| !entry.is_empty() && entry != &id)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            DependencyGraphPackage {
+                id,
+                name,
+                version: item.version.trim().to_string(),
+                dependencies,
+            }
+        })
+        .filter(|item| !item.id.is_empty() && !item.name.is_empty())
+        .collect::<Vec<_>>();
+
+    items.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    Ok(items)
+}
+
 fn environment_roots(explicit_root: Option<String>) -> Vec<PathBuf> {
     let explicit_root = explicit_root
         .map(|value| value.trim().to_string())
@@ -894,6 +1029,37 @@ fn resolve_uv_binary(uv_binary_path: Option<String>) -> Result<String, String> {
     }
 
     Ok("uv".to_string())
+}
+
+fn normalize_package_id(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut normalized = String::new();
+    let mut previous_was_separator = false;
+
+    for character in trimmed.chars() {
+        if character.is_ascii_alphanumeric() {
+            normalized.push(character.to_ascii_lowercase());
+            previous_was_separator = false;
+            continue;
+        }
+
+        if character == '-' || character == '_' || character == '.' {
+            if !previous_was_separator && !normalized.is_empty() {
+                normalized.push('-');
+                previous_was_separator = true;
+            }
+        }
+    }
+
+    while normalized.ends_with('-') {
+        normalized.pop();
+    }
+
+    normalized
 }
 
 fn required_text(label: &str, value: String) -> Result<String, String> {
