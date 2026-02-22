@@ -1329,6 +1329,112 @@ button {
   text-decoration: underline;
 }
 
+.dependency-tree-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.dependency-tree-meta,
+.dependency-tree-status {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.82rem;
+}
+
+.dependency-tree-wrap {
+  border: 1px solid var(--border-0);
+  border-radius: 10px;
+  background: var(--packages-placeholder-bg);
+  padding: 10px 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dependency-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.dependency-tree-list .dependency-tree-list {
+  margin-top: 4px;
+  margin-left: 16px;
+}
+
+.dependency-tree-node-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.82rem;
+}
+
+.dependency-tree-node-name {
+  color: var(--text-1);
+  font-weight: 560;
+}
+
+.dependency-tree-node-version {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+.dependency-tree-node-hint {
+  color: var(--warning-0);
+  font-size: 0.74rem;
+}
+
+.dependency-tree-node.cycle .dependency-tree-node-name,
+.dependency-tree-node.missing .dependency-tree-node-name {
+  color: var(--warning-0);
+}
+
+.requirements-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.requirements-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.requirements-meta {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.82rem;
+}
+
+.requirements-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.requirements-textarea {
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  border: 1px solid var(--border-0);
+  border-radius: 10px;
+  background: var(--table-wrap-bg);
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  padding: 12px;
+  overflow: auto;
+}
+
 .table-wrap {
   border: 1px solid var(--border-0);
   border-radius: 10px;
@@ -1857,6 +1963,16 @@ button {
   .security-details-grid > div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .requirements-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .requirements-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .theme-options-grid {
