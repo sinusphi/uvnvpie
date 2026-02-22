@@ -31,6 +31,13 @@ export interface PackageItem {
   homePage: string;
 }
 
+export interface DependencyGraphPackage {
+  id: string;
+  name: string;
+  version: string;
+  dependencies: string[];
+}
+
 export interface UvCommandResult {
   success: boolean;
   exitCode: number;
