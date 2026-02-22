@@ -39,6 +39,31 @@ export interface UvCommandResult {
   command: string;
 }
 
+export type SecuritySeverityLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
+
+export interface SecurityReference {
+  type: string;
+  url: string;
+}
+
+export interface SecurityFinding {
+  id: string;
+  packageName: string;
+  installedVersion: string;
+  vulnerabilityId: string;
+  aliases: string[];
+  severity: SecuritySeverityLevel;
+  severityLabel: string;
+  summary: string;
+  details: string;
+  fixedVersions: string[];
+  published: string;
+  modified: string;
+  references: SecurityReference[];
+  dependencyType: 'unknown';
+  remediation: string;
+}
+
 export type SidebarTreeKind = 'environments' | 'projects';
 
 interface SidebarTreeNodeBase {
