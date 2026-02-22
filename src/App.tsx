@@ -6,10 +6,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AboutDialog from './components/AboutDialog';
 import ActionsPanel from './components/ActionsPanel';
 import ConsolePanel from './components/ConsolePanel';
+import DependencyTreePanel from './components/DependencyTreePanel';
 import DetailsPanel from './components/DetailsPanel';
 import HeaderPanel from './components/HeaderPanel';
 import InterpreterCard from './components/InterpreterCard';
 import PackagesTable from './components/PackagesTable';
+import RequirementsPanel from './components/RequirementsPanel';
 import SecurityPanel from './components/SecurityPanel';
 import SettingsDialog from './components/SettingsDialog';
 import Sidebar from './components/Sidebar';
@@ -17,6 +19,7 @@ import Tabs from './components/Tabs';
 import Titlebar from './components/Titlebar';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import {
+  fetchEnvironmentDependencyGraph,
   fetchProjectFiles,
   fetchEnvironmentPackages,
   fetchEnvironments,
@@ -48,6 +51,7 @@ import {
   type Language
 } from './state/store';
 import type {
+  DependencyGraphPackage,
   DirectOperationTarget,
   EnvironmentItem,
   OperationTarget,
@@ -102,6 +106,13 @@ interface EnvironmentSecurityState {
   packagesScanned: number;
 }
 
+interface EnvironmentDependencyState {
+  isLoading: boolean;
+  packages: DependencyGraphPackage[];
+  error: string;
+  loadedAt: string;
+}
+
 const INITIAL_CONSOLE_LINES = [
   '[boot] ui initialized',
   '[boot] waiting for environment scan',
@@ -114,6 +125,13 @@ const DEFAULT_ENVIRONMENT_SECURITY_STATE: EnvironmentSecurityState = {
   error: '',
   scannedAt: '',
   packagesScanned: 0
+};
+
+const DEFAULT_ENVIRONMENT_DEPENDENCY_STATE: EnvironmentDependencyState = {
+  isLoading: false,
+  packages: [],
+  error: '',
+  loadedAt: ''
 };
 
 function splitOutputChunk(buffered: string, chunk: string): { lines: string[]; remainder: string } {
@@ -223,6 +241,9 @@ export default function App() {
   const [securityByEnvironment, setSecurityByEnvironment] = useState<Record<string, EnvironmentSecurityState>>({});
   const [selectedSecurityFindingIdByEnvironment, setSelectedSecurityFindingIdByEnvironment] = useState<
     Record<string, string>
+  >({});
+  const [dependencyByEnvironment, setDependencyByEnvironment] = useState<
+    Record<string, EnvironmentDependencyState>
   >({});
 
   const [uvVersion, setUvVersion] = useState('...');
@@ -586,6 +607,14 @@ export default function App() {
     return securityByEnvironment[selectedEnvironment.id] ?? DEFAULT_ENVIRONMENT_SECURITY_STATE;
   }, [selectedEnvironment, securityByEnvironment]);
 
+  const activeEnvironmentDependency = useMemo<EnvironmentDependencyState>(() => {
+    if (!selectedEnvironment) {
+      return DEFAULT_ENVIRONMENT_DEPENDENCY_STATE;
+    }
+
+    return dependencyByEnvironment[selectedEnvironment.id] ?? DEFAULT_ENVIRONMENT_DEPENDENCY_STATE;
+  }, [selectedEnvironment, dependencyByEnvironment]);
+
   const activeSecurityFindingId = useMemo(() => {
     if (!selectedEnvironment) {
       return '';
@@ -647,6 +676,8 @@ export default function App() {
   const toolbarModeActionsDisabled = isJobRunning || !hasModeActionTarget;
   const toolbarPackageActionsDisabled = toolbarModeActionsDisabled || !selectedPackage;
   const projectOnlyActionsDisabled = isJobRunning || !activeProjectDir || !isProjectMode;
+  const dependencyTreeRefreshDisabled =
+    isJobRunning || !selectedEnvironment || activeEnvironmentDependency.isLoading;
   const securityScanDisabled =
     isJobRunning || !selectedEnvironment || packages.length === 0 || activeEnvironmentSecurity.isScanning;
   const isOperationModeDisabled = isJobRunning || isSettingsSaving;
@@ -1287,6 +1318,69 @@ export default function App() {
     });
   };
 
+  const updateEnvironmentDependencyState = (
+    environmentId: string,
+    updater: (previous: EnvironmentDependencyState) => EnvironmentDependencyState
+  ) => {
+    setDependencyByEnvironment((previous) => {
+      const previousState = previous[environmentId] ?? DEFAULT_ENVIRONMENT_DEPENDENCY_STATE;
+      return {
+        ...previous,
+        [environmentId]: updater(previousState)
+      };
+    });
+  };
+
+  const handleRefreshDependencyTree = async (forceRefresh = true) => {
+    if (!selectedEnvironment || isJobRunning) {
+      return;
+    }
+
+    const environment = selectedEnvironment;
+    const environmentId = environment.id;
+    const existingState = dependencyByEnvironment[environmentId] ?? null;
+
+    if (!forceRefresh && existingState) {
+      return;
+    }
+
+    if (existingState?.isLoading) {
+      return;
+    }
+
+    updateEnvironmentDependencyState(environmentId, (previous) => ({
+      ...previous,
+      isLoading: true,
+      error: ''
+    }));
+
+    appendConsole(`[deps] building dependency tree for ${environment.name}`);
+    await waitForUiFrame();
+
+    try {
+      const dependencyPackages = await fetchEnvironmentDependencyGraph(environment.interpreterPath);
+      updateEnvironmentDependencyState(environmentId, () => ({
+        isLoading: false,
+        packages: dependencyPackages,
+        error: '',
+        loadedAt: new Date().toISOString()
+      }));
+      appendConsole(
+        `[deps] loaded ${dependencyPackages.length} package entr${dependencyPackages.length === 1 ? 'y' : 'ies'} for ${
+          environment.name
+        }`
+      );
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error ?? 'Unknown dependency graph error');
+      updateEnvironmentDependencyState(environmentId, (previous) => ({
+        ...previous,
+        isLoading: false,
+        error: messageText
+      }));
+      appendConsole(`[deps] failed to build dependency tree for ${environment.name}: ${messageText}`);
+    }
+  };
+
   const handleSelectSecurityFinding = (findingId: string) => {
     if (!selectedEnvironment) {
       return;
@@ -1429,6 +1523,14 @@ export default function App() {
       ...previous,
       [environment.id]: nextPackages
     }));
+    setDependencyByEnvironment((previous) => {
+      if (!(environment.id in previous)) {
+        return previous;
+      }
+
+      const { [environment.id]: _removedState, ...rest } = previous;
+      return rest;
+    });
     appendConsole(`[data] loaded ${nextPackages.length} package(s) for ${environment.name}`);
   };
 
@@ -1845,6 +1947,22 @@ export default function App() {
     });
 
     if (removedEnvironmentIds.size > 0) {
+      setDependencyByEnvironment((previous) => {
+        const next = { ...previous };
+        let changed = false;
+
+        for (const environmentId of removedEnvironmentIds) {
+          if (!(environmentId in next)) {
+            continue;
+          }
+
+          delete next[environmentId];
+          changed = true;
+        }
+
+        return changed ? next : previous;
+      });
+
       setSecurityByEnvironment((previous) => {
         const next = { ...previous };
         let changed = false;
@@ -2000,6 +2118,18 @@ export default function App() {
   }, [activeWorkspace, packages]);
 
   useEffect(() => {
+    if (activeMainTab !== 'dependencyTree' || !selectedEnvironment) {
+      return;
+    }
+
+    if (dependencyByEnvironment[selectedEnvironment.id]) {
+      return;
+    }
+
+    void handleRefreshDependencyTree(false);
+  }, [activeMainTab, selectedEnvironment, dependencyByEnvironment]);
+
+  useEffect(() => {
     let alive = true;
 
     const loadSettings = async () => {
@@ -2044,6 +2174,7 @@ export default function App() {
       setActiveWorkspaceTabId('');
       setMainTabByWorkspace({});
       setSelectedPackageIdByWorkspace({});
+      setDependencyByEnvironment({});
       setSecurityByEnvironment({});
       setSelectedSecurityFindingIdByEnvironment({});
       setPackagesByEnvironment({});
@@ -2071,6 +2202,7 @@ export default function App() {
           setActiveWorkspaceTabId(initialTab.id);
           setMainTabByWorkspace({ [initialTab.id]: 'packages' });
           setSelectedPackageIdByWorkspace({ [initialTab.id]: '' });
+          setDependencyByEnvironment({});
           setSecurityByEnvironment({});
           setSelectedSecurityFindingIdByEnvironment({});
           setPackagesByEnvironment({});
@@ -2102,6 +2234,7 @@ export default function App() {
         setSelectedPackageIdByWorkspace(
           Object.fromEntries(restoredTabs.map((tab) => [tab.id, ''] as const)) as Record<string, string>
         );
+        setDependencyByEnvironment({});
         setSecurityByEnvironment({});
         setSelectedSecurityFindingIdByEnvironment({});
         setPackagesByEnvironment({});
@@ -2532,6 +2665,19 @@ export default function App() {
                           Sync
                         </button>
                       </div>
+                    ) : activeMainTab === 'dependencyTree' ? (
+                      <div className="packages-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={dependencyTreeRefreshDisabled}
+                          onClick={() => void handleRefreshDependencyTree()}
+                        >
+                          {activeEnvironmentDependency.isLoading
+                            ? t('dependencyTreeRefreshingButton')
+                            : t('dependencyTreeRefresh')}
+                        </button>
+                      </div>
                     ) : activeMainTab === 'security' ? (
                       <div className="packages-actions">
                         <button
@@ -2557,6 +2703,16 @@ export default function App() {
                       onSelectPackage={handleSelectPackage}
                       t={t}
                     />
+                  ) : activeMainTab === 'dependencyTree' ? (
+                    <DependencyTreePanel
+                      packages={activeEnvironmentDependency.packages}
+                      isLoading={activeEnvironmentDependency.isLoading}
+                      error={activeEnvironmentDependency.error}
+                      loadedAt={activeEnvironmentDependency.loadedAt}
+                      t={t}
+                    />
+                  ) : activeMainTab === 'requirements' ? (
+                    <RequirementsPanel packages={packages} environmentName={displayedEnvironment.name} t={t} />
                   ) : activeMainTab === 'security' ? (
                     <SecurityPanel
                       findings={activeEnvironmentSecurity.findings}
@@ -2571,13 +2727,7 @@ export default function App() {
                     />
                   ) : (
                     <div className="packages-placeholder">
-                      <p>
-                        {activeMainTab === 'dependencyTree'
-                          ? t('dependencyTreePlaceholder')
-                          : activeMainTab === 'requirements'
-                            ? t('requirementsPlaceholder')
-                            : t('placeholder')}
-                      </p>
+                      <p>{t('placeholder')}</p>
                     </div>
                   )}
                 </section>
