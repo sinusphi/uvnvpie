@@ -262,7 +262,7 @@ button {
 }
 
 .titlebar-task-runway.is-active .titlebar-task-glow {
-  animation: titlebar-task-glow-cycle 1816ms linear infinite;
+  animation: titlebar-task-glow-cycle 1770ms linear infinite;
 }
 
 @keyframes titlebar-task-glow-cycle {

@@ -178,6 +178,7 @@ export async function runUvAdd(
     uvBinaryPath?: string;
     dev?: boolean;
     optionalGroup?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_add', {
@@ -185,7 +186,8 @@ export async function runUvAdd(
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
     requirement,
     dev: Boolean(options?.dev),
-    optionalGroup: normalizeOptionalString(options?.optionalGroup)
+    optionalGroup: normalizeOptionalString(options?.optionalGroup),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -194,12 +196,14 @@ export async function runUvLock(
   options?: {
     uvBinaryPath?: string;
     checkOnly?: boolean;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_lock', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    checkOnly: Boolean(options?.checkOnly)
+    checkOnly: Boolean(options?.checkOnly),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -209,13 +213,15 @@ export async function runUvSync(
     uvBinaryPath?: string;
     frozen?: boolean;
     noDev?: boolean;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_sync', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
     frozen: Boolean(options?.frozen),
-    noDev: Boolean(options?.noDev)
+    noDev: Boolean(options?.noDev),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -224,12 +230,14 @@ export async function runUvUpgrade(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_upgrade', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -238,12 +246,14 @@ export async function runUvUninstall(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_uninstall', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -252,12 +262,14 @@ export async function runUvDirectInstall(
   requirement: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_install', {
     interpreterPath,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    requirement
+    requirement,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -266,12 +278,14 @@ export async function runUvDirectUpgrade(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_upgrade', {
     interpreterPath,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -280,12 +294,14 @@ export async function runUvDirectUninstall(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_uninstall', {
     interpreterPath,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -293,10 +309,12 @@ export async function runUvDirectUpdateAll(
   interpreterPath: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_update_all', {
     interpreterPath,
-    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath)
+    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }

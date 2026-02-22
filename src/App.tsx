@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { type CloseRequestedEvent, getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, message, open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -56,6 +57,22 @@ import type {
 } from './types/domain';
 
 type MainTab = 'packages' | 'dependencyTree' | 'requirements' | 'security';
+type CommandOutputChannel = 'stdout' | 'stderr';
+
+interface UvCommandOutputEvent {
+  streamId: string;
+  channel: CommandOutputChannel;
+  chunk: string;
+}
+
+interface CommandStreamState {
+  stdout: string;
+  stderr: string;
+  sawOutput: boolean;
+}
+
+const UV_COMMAND_OUTPUT_EVENT = 'uv-command-output';
+const TASK_GLOW_MIN_CYCLE_MS = 1770;
 
 interface WorkspaceTabState {
   id: string;
@@ -79,6 +96,14 @@ const INITIAL_CONSOLE_LINES = [
   '[boot] waiting for environment scan',
   '[ready] waiting for user action'
 ];
+
+function splitOutputChunk(buffered: string, chunk: string): { lines: string[]; remainder: string } {
+  const normalized = `${buffered}${chunk}`.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const parts = normalized.split('\n');
+  const remainder = parts.pop() ?? '';
+  const lines = parts.map((line) => line.trim()).filter((line) => line.length > 0);
+  return { lines, remainder };
+}
 
 async function showMessage(text: string, title = 'uvnvpie'): Promise<void> {
   try {
@@ -180,6 +205,7 @@ export default function App() {
   const [uvVersion, setUvVersion] = useState('...');
   const [consoleLines, setConsoleLines] = useState<string[]>(INITIAL_CONSOLE_LINES);
   const [isJobRunning, setIsJobRunning] = useState(false);
+  const [isTaskGlowActive, setIsTaskGlowActive] = useState(false);
   const [isConsoleCollapsed, setIsConsoleCollapsed] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(() => document.hasFocus());
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
@@ -187,6 +213,10 @@ export default function App() {
   const timersRef = useRef<number[]>([]);
   const jobTokenRef = useRef(0);
   const workspaceCounterRef = useRef(0);
+  const commandStreamCounterRef = useRef(0);
+  const commandStreamsRef = useRef<Record<string, CommandStreamState>>({});
+  const taskGlowStartedAtRef = useRef<number | null>(null);
+  const taskGlowHideTimerRef = useRef<number | null>(null);
   const closePromptActiveRef = useRef(false);
   const allowNativeCloseRef = useRef(false);
   const requestWindowCloseRef = useRef<() => Promise<void>>(async () => {});
@@ -238,12 +268,69 @@ export default function App() {
     setConsoleLines((previous) => [...previous, `[${timestamp()}] ${line}`]);
   };
 
+  const appendConsoleBatch = (lines: string[]) => {
+    if (lines.length === 0) {
+      return;
+    }
+
+    setConsoleLines((previous) => [...previous, ...lines.map((line) => `[${timestamp()}] ${line}`)]);
+  };
+
   const clearTimers = () => {
     for (const timer of timersRef.current) {
       window.clearTimeout(timer);
     }
 
     timersRef.current = [];
+  };
+
+  const clearTaskGlowHideTimer = () => {
+    if (taskGlowHideTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(taskGlowHideTimerRef.current);
+    taskGlowHideTimerRef.current = null;
+  };
+
+  const waitForUiFrame = async () => {
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  };
+
+  const beginCommandStream = () => {
+    commandStreamCounterRef.current += 1;
+    const streamId = `uv-stream-${Date.now()}-${commandStreamCounterRef.current}`;
+    commandStreamsRef.current[streamId] = {
+      stdout: '',
+      stderr: '',
+      sawOutput: false
+    };
+    return streamId;
+  };
+
+  const finishCommandStream = (streamId: string): boolean => {
+    const state = commandStreamsRef.current[streamId];
+    if (!state) {
+      return false;
+    }
+
+    const stdoutTail = state.stdout.trim();
+    if (stdoutTail) {
+      appendConsole(`[stdout] ${stdoutTail}`);
+      state.sawOutput = true;
+    }
+
+    const stderrTail = state.stderr.trim();
+    if (stderrTail) {
+      appendConsole(`[stderr] ${stderrTail}`);
+      state.sawOutput = true;
+    }
+
+    const sawOutput = state.sawOutput;
+    delete commandStreamsRef.current[streamId];
+    return sawOutput;
   };
 
   const loadWorkspaceEnvironments = async (
@@ -1146,26 +1233,48 @@ export default function App() {
     }));
   };
 
-  const appendCommandOutput = (channel: 'stdout' | 'stderr', output: string) => {
+  const appendCommandOutput = (channel: CommandOutputChannel, output: string) => {
     const lines = output
-      .split(/\r?\n/)
+      .split(/\r?\n|\r/g)
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
 
-    for (const line of lines) {
-      appendConsole(`[${channel}] ${line}`);
-    }
+    appendConsoleBatch(lines.map((line) => `[${channel}] ${line}`));
   };
 
-  const appendUvCommandResult = (result: UvCommandResult) => {
+  const appendUvCommandResult = (result: UvCommandResult, options: { includeOutput?: boolean } = {}) => {
+    const includeOutput = options.includeOutput ?? true;
     appendConsole(`[cmd] ${result.command}`);
-    appendCommandOutput('stdout', result.stdout);
-    appendCommandOutput('stderr', result.stderr);
+    if (includeOutput) {
+      appendCommandOutput('stdout', result.stdout);
+      appendCommandOutput('stderr', result.stderr);
+    }
     appendConsole(
       result.success
         ? `[done] command exited with code ${result.exitCode}`
         : `[error] command exited with code ${result.exitCode}`
     );
+  };
+
+  const executeUvCommandStep = async (step: {
+    label: string;
+    run: (streamId: string) => Promise<UvCommandResult>;
+  }): Promise<UvCommandResult> => {
+    appendConsole(`[step] ${step.label}`);
+
+    const streamId = beginCommandStream();
+
+    try {
+      const result = await step.run(streamId);
+      const streamedOutputSeen = finishCommandStream(streamId);
+      appendUvCommandResult(result, {
+        includeOutput: !streamedOutputSeen
+      });
+      return result;
+    } catch (error) {
+      finishCommandStream(streamId);
+      throw error;
+    }
   };
 
   const refreshSelectedEnvironmentPackages = async () => {
@@ -1189,7 +1298,7 @@ export default function App() {
 
   const runProjectAction = async (
     actionLabel: string,
-    steps: Array<{ label: string; run: () => Promise<UvCommandResult> }>,
+    steps: Array<{ label: string; run: (streamId: string) => Promise<UvCommandResult> }>,
     options: { refreshPackages?: boolean } = {}
   ) => {
     if (isJobRunning || !activeProjectDir) {
@@ -1198,12 +1307,11 @@ export default function App() {
 
     setIsJobRunning(true);
     appendConsole(`[job] ${actionLabel}`);
+    await waitForUiFrame();
 
     try {
       for (const step of steps) {
-        appendConsole(`[step] ${step.label}`);
-        const result = await step.run();
-        appendUvCommandResult(result);
+        const result = await executeUvCommandStep(step);
 
         if (!result.success) {
           throw new Error(result.stderr || `Command failed with exit code ${result.exitCode}.`);
@@ -1224,7 +1332,7 @@ export default function App() {
 
   const runDirectAction = async (
     actionLabel: string,
-    steps: Array<{ label: string; run: () => Promise<UvCommandResult> }>,
+    steps: Array<{ label: string; run: (streamId: string) => Promise<UvCommandResult> }>,
     options: { refreshPackages?: boolean } = {}
   ) => {
     if (isJobRunning || !activeInterpreterPath) {
@@ -1233,12 +1341,11 @@ export default function App() {
 
     setIsJobRunning(true);
     appendConsole(`[job] ${actionLabel}`);
+    await waitForUiFrame();
 
     try {
       for (const step of steps) {
-        appendConsole(`[step] ${step.label}`);
-        const result = await step.run();
-        appendUvCommandResult(result);
+        const result = await executeUvCommandStep(step);
 
         if (!result.success) {
           throw new Error(result.stderr || `Command failed with exit code ${result.exitCode}.`);
@@ -1288,9 +1395,10 @@ export default function App() {
         [
           {
             label: `uv pip install ${requirement}`,
-            run: () =>
+            run: (streamId: string) =>
               runUvDirectInstall(activeInterpreterPath, requirement, {
-                uvBinaryPath: normalizedUvBinaryPath
+                uvBinaryPath: normalizedUvBinaryPath,
+                streamId
               })
           }
         ],
@@ -1304,9 +1412,10 @@ export default function App() {
       [
         {
           label: `uv add ${requirement}`,
-          run: () =>
+          run: (streamId: string) =>
             runUvAdd(activeProjectDir, requirement, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         }
       ],
@@ -1326,9 +1435,10 @@ export default function App() {
         [
           {
             label: `uv pip install --upgrade ${packageName}`,
-            run: () =>
+            run: (streamId: string) =>
               runUvDirectUpgrade(activeInterpreterPath, packageName, {
-                uvBinaryPath: normalizedUvBinaryPath
+                uvBinaryPath: normalizedUvBinaryPath,
+                streamId
               })
           }
         ],
@@ -1343,16 +1453,18 @@ export default function App() {
       [
         {
           label: `uv lock --upgrade-package ${packageName}`,
-          run: () =>
+          run: (streamId: string) =>
             runUvUpgrade(activeProjectDir, packageName, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         },
         {
           label: 'uv sync',
-          run: () =>
+          run: (streamId: string) =>
             runUvSync(activeProjectDir, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         }
       ],
@@ -1372,9 +1484,10 @@ export default function App() {
         [
           {
             label: `uv pip uninstall ${packageName}`,
-            run: () =>
+            run: (streamId: string) =>
               runUvDirectUninstall(activeInterpreterPath, packageName, {
-                uvBinaryPath: normalizedUvBinaryPath
+                uvBinaryPath: normalizedUvBinaryPath,
+                streamId
               })
           }
         ],
@@ -1389,9 +1502,10 @@ export default function App() {
       [
         {
           label: `uv remove ${packageName}`,
-          run: () =>
+          run: (streamId: string) =>
             runUvUninstall(activeProjectDir, packageName, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         }
       ],
@@ -1410,9 +1524,10 @@ export default function App() {
         [
           {
             label: 'uv pip list --outdated && uv pip install --upgrade <outdated>',
-            run: () =>
+            run: (streamId: string) =>
               runUvDirectUpdateAll(activeInterpreterPath, {
-                uvBinaryPath: normalizedUvBinaryPath
+                uvBinaryPath: normalizedUvBinaryPath,
+                streamId
               })
           }
         ],
@@ -1426,16 +1541,18 @@ export default function App() {
       [
         {
           label: 'uv lock',
-          run: () =>
+          run: (streamId: string) =>
             runUvLock(activeProjectDir, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         },
         {
           label: 'uv sync',
-          run: () =>
+          run: (streamId: string) =>
             runUvSync(activeProjectDir, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         }
       ],
@@ -1458,9 +1575,10 @@ export default function App() {
       [
         {
           label: `uv add ${requirement}`,
-          run: () =>
+          run: (streamId: string) =>
             runUvAdd(activeProjectDir, requirement, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         }
       ],
@@ -1477,9 +1595,10 @@ export default function App() {
     await runProjectAction('Lock', [
       {
         label: 'uv lock',
-        run: () =>
+        run: (streamId: string) =>
           runUvLock(activeProjectDir, {
-            uvBinaryPath: normalizedUvBinaryPath
+            uvBinaryPath: normalizedUvBinaryPath,
+            streamId
           })
       }
     ]);
@@ -1496,9 +1615,10 @@ export default function App() {
       [
         {
           label: 'uv sync',
-          run: () =>
+          run: (streamId: string) =>
             runUvSync(activeProjectDir, {
-              uvBinaryPath: normalizedUvBinaryPath
+              uvBinaryPath: normalizedUvBinaryPath,
+              streamId
             })
         }
       ],
@@ -1591,6 +1711,80 @@ export default function App() {
       setEditingWorkspaceName('');
     }
   };
+
+  useEffect(() => {
+    let active = true;
+    let unlisten: UnlistenFn | null = null;
+
+    void listen<UvCommandOutputEvent>(UV_COMMAND_OUTPUT_EVENT, (event) => {
+      const payload = event.payload;
+      if (!payload || (payload.channel !== 'stdout' && payload.channel !== 'stderr')) {
+        return;
+      }
+
+      const state = commandStreamsRef.current[payload.streamId];
+      if (!state) {
+        return;
+      }
+
+      const parsed = splitOutputChunk(state[payload.channel], payload.chunk ?? '');
+      state[payload.channel] = parsed.remainder;
+
+      if (parsed.lines.length > 0 || parsed.remainder.length > 0) {
+        state.sawOutput = true;
+      }
+
+      appendConsoleBatch(parsed.lines.map((line) => `[${payload.channel}] ${line}`));
+    })
+      .then((detach) => {
+        if (!active) {
+          detach();
+          return;
+        }
+        unlisten = detach;
+      })
+      .catch((error) => {
+        console.error('command stream listener registration failed', error);
+      });
+
+    return () => {
+      active = false;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isJobRunning) {
+      clearTaskGlowHideTimer();
+      taskGlowStartedAtRef.current = Date.now();
+      setIsTaskGlowActive(true);
+      return;
+    }
+
+    const startedAt = taskGlowStartedAtRef.current;
+    if (startedAt === null) {
+      setIsTaskGlowActive(false);
+      return;
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    const remainingMs = TASK_GLOW_MIN_CYCLE_MS - elapsedMs;
+
+    if (remainingMs <= 0) {
+      taskGlowStartedAtRef.current = null;
+      setIsTaskGlowActive(false);
+      return;
+    }
+
+    clearTaskGlowHideTimer();
+    taskGlowHideTimerRef.current = window.setTimeout(() => {
+      taskGlowHideTimerRef.current = null;
+      taskGlowStartedAtRef.current = null;
+      setIsTaskGlowActive(false);
+    }, remainingMs);
+  }, [isJobRunning]);
 
   useEffect(() => {
     if (!activeWorkspaceTabId && workspaceTabs.length > 0) {
@@ -2017,6 +2211,7 @@ export default function App() {
   useEffect(() => {
     return () => {
       clearTimers();
+      clearTaskGlowHideTimer();
     };
   }, []);
 
@@ -2030,7 +2225,7 @@ export default function App() {
         <div className="app-window">
           <Titlebar
             title={t('appTitle')}
-            isTaskRunning={isJobRunning}
+            isTaskRunning={isTaskGlowActive}
             operationMode={settings.operationMode}
             themeMode={themeMode}
             autoSwitchModeEnabled={settings.autoSwitchMode}
