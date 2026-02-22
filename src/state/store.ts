@@ -2,6 +2,32 @@ import { LazyStore } from '@tauri-apps/plugin-store';
 
 export type Language = 'de' | 'en';
 export type OperationMode = 'project' | 'direct';
+export type ThemeMode = 'dark' | 'light';
+export type ThemePreset = 'dark-red' | 'dark-green' | 'dark-blue' | 'light-blue' | 'light-red';
+
+const THEME_MODE_BY_PRESET: Record<ThemePreset, ThemeMode> = {
+  'dark-red': 'dark',
+  'dark-green': 'dark',
+  'dark-blue': 'dark',
+  'light-blue': 'light',
+  'light-red': 'light'
+};
+
+const THEME_MODE_SWITCH_TARGETS: Record<ThemePreset, ThemePreset> = {
+  'dark-red': 'light-red',
+  'dark-green': 'light-blue',
+  'dark-blue': 'light-blue',
+  'light-blue': 'dark-blue',
+  'light-red': 'dark-red'
+};
+
+export function getThemeMode(themePreset: ThemePreset): ThemeMode {
+  return THEME_MODE_BY_PRESET[themePreset];
+}
+
+export function toggleThemeModePreset(themePreset: ThemePreset): ThemePreset {
+  return THEME_MODE_SWITCH_TARGETS[themePreset];
+}
 
 export interface SavedWorkspaceTab {
   envRootDir: string;
@@ -17,6 +43,7 @@ export interface AppSettings {
   language: Language;
   operationMode: OperationMode;
   autoSwitchMode: boolean;
+  themePreset: ThemePreset;
   envRootDir: string;
   uvBinaryPath: string;
   autoSaveDebounceMs: number;
@@ -27,6 +54,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: 'de',
   operationMode: 'project',
   autoSwitchMode: false,
+  themePreset: 'dark-red',
   envRootDir: '',
   uvBinaryPath: '',
   autoSaveDebounceMs: 200,
@@ -42,6 +70,7 @@ const SETTING_KEYS: Array<keyof AppSettings> = [
   'language',
   'operationMode',
   'autoSwitchMode',
+  'themePreset',
   'envRootDir',
   'uvBinaryPath',
   'autoSaveDebounceMs',
@@ -54,6 +83,20 @@ function toLanguage(value: unknown): Language {
 
 function toOperationMode(value: unknown): OperationMode {
   return value === 'direct' ? 'direct' : 'project';
+}
+
+function toThemePreset(value: unknown): ThemePreset {
+  if (
+    value === 'dark-red' ||
+    value === 'dark-green' ||
+    value === 'dark-blue' ||
+    value === 'light-blue' ||
+    value === 'light-red'
+  ) {
+    return value;
+  }
+
+  return DEFAULT_SETTINGS.themePreset;
 }
 
 function toStringValue(value: unknown): string {
@@ -118,6 +161,7 @@ function normalizeSettings(raw: Partial<Record<keyof AppSettings, unknown>>): Ap
     language: toLanguage(raw.language),
     operationMode: toOperationMode(raw.operationMode),
     autoSwitchMode: toBoolean(raw.autoSwitchMode, DEFAULT_SETTINGS.autoSwitchMode),
+    themePreset: toThemePreset(raw.themePreset),
     envRootDir: toStringValue(raw.envRootDir),
     uvBinaryPath: toStringValue(raw.uvBinaryPath),
     autoSaveDebounceMs: toDebounce(raw.autoSaveDebounceMs),

@@ -1,5 +1,13 @@
-import type { AppSettings, Language } from '../state/store';
+import type { AppSettings, Language, ThemePreset } from '../state/store';
 import type { I18nKey } from '../state/i18n';
+
+const THEME_OPTIONS: Array<{ value: ThemePreset; labelKey: I18nKey }> = [
+  { value: 'dark-red', labelKey: 'themeDarkRed' },
+  { value: 'dark-green', labelKey: 'themeDarkGreen' },
+  { value: 'dark-blue', labelKey: 'themeDarkBlue' },
+  { value: 'light-blue', labelKey: 'themeLightBlue' },
+  { value: 'light-red', labelKey: 'themeLightRed' }
+];
 
 interface SettingsDialogProps {
   open: boolean;
@@ -62,6 +70,13 @@ export default function SettingsDialog({
     onChange({
       ...draft,
       alwaysSaveTabs: checked
+    });
+  };
+
+  const onThemePresetChange = (themePreset: ThemePreset) => {
+    onChange({
+      ...draft,
+      themePreset
     });
   };
 
@@ -140,6 +155,26 @@ export default function SettingsDialog({
               <span>{t('alwaysSaveTabs')}</span>
             </span>
           </label>
+
+          <div className="field-row theme-field-row">
+            <span className="theme-options-title">{t('themeSelection')}</span>
+            <div className="theme-options-grid" role="group" aria-label={t('themeSelection')}>
+              {THEME_OPTIONS.map((themeOption) => (
+                <label key={themeOption.value} className="theme-option-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={draft.themePreset === themeOption.value}
+                    onChange={(event) => {
+                      if (event.target.checked) {
+                        onThemePresetChange(themeOption.value);
+                      }
+                    }}
+                  />
+                  <span>{t(themeOption.labelKey)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
 
         <footer className="dialog-footer">

@@ -1,28 +1,319 @@
 :root {
   --font-ui: 'Sora', 'Noto Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Mono', monospace;
+}
 
-  --bg-0: #060a14;
-  --bg-1: #0c1527;
-  --bg-2: #111b2f;
-  --panel-0: #11192b;
-  --panel-1: #151f35;
-  --panel-2: #13182e;
-  --panel-hover: #20284d;
+.window-shell.theme-dark-red,
+.window-shell.theme-dark-green,
+.window-shell.theme-dark-blue {
+  --bg-0: #101217;
+  --bg-1: #1b1f27;
+  --bg-2: #232833;
+  --panel-0: #1b2029;
+  --panel-1: #252b36;
+  --panel-2: #222833;
+  --panel-hover: #313848;
 
-  --text-0: #e8edf8;
-  --text-1: #cfd7ec;
-  --text-2: #9aa8c8;
+  --text-0: #eef2f8;
+  --text-1: #d5dceb;
+  --text-2: #a4aec3;
 
-  --border-0: #262d52;
-  --border-1: #2b345c;
-  --border-2: #334070;
+  --border-0: #3c4455;
+  --border-1: #495366;
+  --border-2: #5a667e;
 
-  --accent-0: #7cacff;
-  --accent-1: #5895ff;
-  --accent-2: #3f83ea;
-  --danger-0: #f26060;
+  --danger-0: #e36d6f;
+  --warning-0: #ffd257;
+  --success-0: #84d994;
+  --focus-ring: rgba(188, 214, 255, 0.9);
+  --focus-ring-soft: rgba(153, 189, 247, 0.55);
+  --focus-ring-strong: rgba(196, 218, 255, 0.95);
 
-  --shadow-0: 0 12px 30px rgba(2, 8, 22, 0.45);
+  --shadow-0: 0 12px 30px rgba(7, 9, 14, 0.46);
   --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+
+  --shell-bg-top: rgba(20, 23, 31, 0.78);
+  --shell-bg-bottom: rgba(12, 15, 21, 0.82);
+  --shell-ring: rgba(140, 160, 205, 0.14);
+  --shell-glow: 0 0 8px rgba(140, 160, 205, 0.14);
+  --shell-inner-ring: rgba(175, 194, 236, 0.05);
+
+  --app-glow-1: rgba(145, 170, 220, 0.14);
+  --app-glow-2: rgba(115, 138, 188, 0.12);
+  --titlebar-bg-top: rgba(28, 33, 44, 0.96);
+  --titlebar-bg-bottom: rgba(20, 24, 33, 0.96);
+  --sidebar-bg-top: rgba(27, 32, 43, 0.96);
+  --sidebar-bg-bottom: rgba(18, 22, 31, 0.97);
+  --sidebar-glow: rgba(146, 169, 219, 0.14);
+  --panel-base-top: rgba(34, 40, 52, 0.8);
+  --panel-base-bottom: rgba(24, 30, 42, 0.92);
+  --panel-accent-glow: rgba(146, 169, 219, 0.09);
+  --workspace-active-bg: #242c3b;
+  --packages-bg: #232b3b;
+  --packages-placeholder-bg: rgba(16, 22, 31, 0.76);
+  --table-wrap-bg: rgba(30, 39, 56, 0.95);
+  --table-head-bg: rgba(29, 36, 51, 0.98);
+  --table-border: rgba(71, 83, 111, 0.56);
+  --table-row-odd: rgba(28, 36, 52, 0.75);
+  --table-row-even: rgba(34, 44, 63, 0.78);
+  --table-row-hover: rgba(50, 62, 84, 0.48);
+  --table-row-selected-top: rgba(70, 84, 112, 0.56);
+  --table-row-selected-bottom: rgba(56, 68, 92, 0.64);
+  --input-bg: rgba(17, 22, 32, 0.9);
+  --input-bg-strong: rgba(15, 20, 30, 0.94);
+  --option-bg: #1a2030;
+  --console-bg: rgba(12, 16, 24, 0.9);
+  --dialog-overlay: rgba(8, 10, 16, 0.66);
+  --dialog-bg-top: rgba(30, 36, 48, 0.98);
+  --dialog-bg-bottom: rgba(23, 28, 39, 0.99);
+
+  --button-bg-top: rgba(41, 48, 61, 0.94);
+  --button-bg-bottom: rgba(32, 39, 50, 0.98);
+  --button-bg-hover-top: rgba(52, 60, 74, 0.96);
+  --button-bg-hover-bottom: rgba(39, 46, 59, 1);
+  --button-border: #56637a;
+  --button-border-hover: #6c7b97;
+  --button-text: #edf2fa;
+  --button-danger-bg-top: rgba(81, 45, 49, 0.72);
+  --button-danger-bg-bottom: rgba(59, 31, 35, 0.78);
+  --button-danger-border: rgba(227, 109, 111, 0.55);
+  --button-danger-text: #ffe5e6;
+  --button-danger-hover-bg: rgba(227, 109, 111, 0.23);
+  --button-danger-hover-border: rgba(227, 109, 111, 0.72);
+  --button-danger-hover-text: #ffe7e8;
+
+  --auto-switch-border: rgba(120, 137, 170, 0.6);
+  --auto-switch-bg-top: rgba(30, 36, 49, 0.95);
+  --auto-switch-bg-bottom: rgba(23, 29, 41, 0.97);
+  --auto-switch-thumb: #d7deea;
+  --auto-switch-focus: rgba(188, 214, 255, 0.95);
+
+  --mode-auto-border: #8ea0be;
+  --mode-auto-text: #dde6f7;
+  --mode-auto-hover-border: #a8b7d1;
+  --mode-auto-hover-text: #eff5ff;
+
+  --select-color-scheme: dark;
+}
+
+.window-shell.theme-light-blue,
+.window-shell.theme-light-red {
+  --bg-0: #eef2f8;
+  --bg-1: #f8fafd;
+  --bg-2: #e5ebf4;
+  --panel-0: #ffffff;
+  --panel-1: #f4f7fc;
+  --panel-2: #edf2f9;
+  --panel-hover: #e3ebf7;
+
+  --text-0: #1d2a3e;
+  --text-1: #2f3d55;
+  --text-2: #5b6a85;
+
+  --border-0: #bcc7d8;
+  --border-1: #adb9ce;
+  --border-2: #9daac2;
+
+  --danger-0: #c65358;
+  --warning-0: #b98106;
+  --success-0: #2e9d57;
+  --focus-ring: rgba(71, 122, 214, 0.72);
+  --focus-ring-soft: rgba(71, 122, 214, 0.5);
+  --focus-ring-strong: rgba(45, 90, 182, 0.75);
+
+  --shadow-0: 0 10px 24px rgba(113, 133, 170, 0.18);
+  --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  --shell-bg-top: rgba(255, 255, 255, 0.86);
+  --shell-bg-bottom: rgba(230, 237, 247, 0.96);
+  --shell-ring: rgba(85, 108, 149, 0.18);
+  --shell-glow: 0 0 8px rgba(85, 108, 149, 0.16);
+  --shell-inner-ring: rgba(88, 111, 153, 0.08);
+
+  --app-glow-1: rgba(133, 167, 236, 0.2);
+  --app-glow-2: rgba(102, 143, 224, 0.14);
+  --titlebar-bg-top: rgba(243, 247, 253, 0.98);
+  --titlebar-bg-bottom: rgba(233, 240, 250, 0.98);
+  --sidebar-bg-top: rgba(246, 250, 255, 0.98);
+  --sidebar-bg-bottom: rgba(236, 243, 253, 0.98);
+  --sidebar-glow: rgba(119, 154, 226, 0.18);
+  --panel-base-top: rgba(255, 255, 255, 0.98);
+  --panel-base-bottom: rgba(239, 245, 253, 0.98);
+  --panel-accent-glow: rgba(119, 154, 226, 0.12);
+  --workspace-active-bg: #eaf0f9;
+  --packages-bg: #f6f9ff;
+  --packages-placeholder-bg: rgba(236, 242, 251, 0.98);
+  --table-wrap-bg: rgba(245, 249, 255, 0.98);
+  --table-head-bg: rgba(234, 241, 251, 0.99);
+  --table-border: rgba(162, 175, 202, 0.62);
+  --table-row-odd: rgba(241, 247, 255, 0.94);
+  --table-row-even: rgba(233, 241, 251, 0.98);
+  --table-row-hover: rgba(211, 226, 247, 0.82);
+  --table-row-selected-top: rgba(194, 214, 246, 0.92);
+  --table-row-selected-bottom: rgba(175, 200, 240, 0.96);
+  --input-bg: rgba(250, 252, 255, 0.99);
+  --input-bg-strong: rgba(244, 248, 255, 1);
+  --option-bg: #f7faff;
+  --console-bg: rgba(243, 248, 255, 0.98);
+  --dialog-overlay: rgba(119, 136, 168, 0.22);
+  --dialog-bg-top: rgba(252, 254, 255, 0.99);
+  --dialog-bg-bottom: rgba(242, 248, 255, 0.99);
+
+  --button-bg-top: rgba(255, 255, 255, 0.98);
+  --button-bg-bottom: rgba(243, 247, 253, 1);
+  --button-bg-hover-top: rgba(248, 251, 255, 1);
+  --button-bg-hover-bottom: rgba(235, 242, 252, 1);
+  --button-border: #99abc6;
+  --button-border-hover: #8198bc;
+  --button-text: #22324a;
+  --button-danger-bg-top: rgba(247, 229, 230, 0.9);
+  --button-danger-bg-bottom: rgba(241, 214, 216, 0.95);
+  --button-danger-border: rgba(198, 83, 88, 0.52);
+  --button-danger-text: #63292d;
+  --button-danger-hover-bg: rgba(198, 83, 88, 0.2);
+  --button-danger-hover-border: rgba(198, 83, 88, 0.68);
+  --button-danger-hover-text: #572024;
+
+  --auto-switch-border: rgba(120, 137, 170, 0.7);
+  --auto-switch-bg-top: rgba(245, 249, 255, 0.98);
+  --auto-switch-bg-bottom: rgba(228, 237, 249, 0.98);
+  --auto-switch-thumb: #ffffff;
+  --auto-switch-focus: rgba(75, 117, 194, 0.78);
+
+  --mode-auto-border: #7d92b9;
+  --mode-auto-text: #405786;
+  --mode-auto-hover-border: #647ea9;
+  --mode-auto-hover-text: #30446b;
+
+  --select-color-scheme: light;
+}
+
+.window-shell.theme-dark-red {
+  --accent-0: #e98080;
+  --accent-1: #c84f56;
+  --accent-2: #9e3339;
+
+  --shell-border: #ca535b;
+  --shell-inner-border: #d26a72;
+  --frame-border: #be4951;
+
+  --button-accent-border: #b8636a;
+  --button-accent-border-hover: #cf7c82;
+
+  --mode-project-bg-top: rgba(201, 81, 89, 0.52);
+  --mode-project-bg-bottom: rgba(120, 39, 44, 0.58);
+  --mode-project-ring: rgba(240, 155, 163, 0.16);
+  --mode-project-glow: rgba(201, 81, 89, 0.26);
+  --mode-project-hover-bg-top: rgba(219, 97, 105, 0.58);
+  --mode-project-hover-bg-bottom: rgba(133, 46, 52, 0.64);
+  --mode-project-hover-ring: rgba(242, 175, 181, 0.2);
+  --mode-project-hover-glow: rgba(220, 95, 103, 0.3);
+
+  --auto-switch-active-border: #c95b63;
+  --auto-switch-active-top: #d46b73;
+  --auto-switch-active-bottom: #a63b43;
+}
+
+.window-shell.theme-dark-green {
+  --accent-0: #82ffab;
+  --accent-1: #3cda73;
+  --accent-2: #219952;
+
+  --shell-border: #42d875;
+  --shell-inner-border: #67ef93;
+  --frame-border: #33bc64;
+
+  --button-accent-border: #5bbd7f;
+  --button-accent-border-hover: #81db9f;
+
+  --mode-project-bg-top: rgba(64, 213, 118, 0.48);
+  --mode-project-bg-bottom: rgba(29, 121, 67, 0.6);
+  --mode-project-ring: rgba(143, 255, 186, 0.14);
+  --mode-project-glow: rgba(64, 213, 118, 0.24);
+  --mode-project-hover-bg-top: rgba(91, 228, 140, 0.54);
+  --mode-project-hover-bg-bottom: rgba(42, 140, 81, 0.66);
+  --mode-project-hover-ring: rgba(176, 255, 210, 0.18);
+  --mode-project-hover-glow: rgba(88, 228, 138, 0.3);
+
+  --auto-switch-active-border: #42ce72;
+  --auto-switch-active-top: #54e084;
+  --auto-switch-active-bottom: #2c9a56;
+}
+
+.window-shell.theme-dark-blue {
+  --accent-0: #8ac9ff;
+  --accent-1: #4da5ff;
+  --accent-2: #2f7bd2;
+
+  --shell-border: #4f9ff3;
+  --shell-inner-border: #7dbefc;
+  --frame-border: #3f8fe1;
+
+  --button-accent-border: #6da6dd;
+  --button-accent-border-hover: #92c0eb;
+
+  --mode-project-bg-top: rgba(83, 163, 255, 0.52);
+  --mode-project-bg-bottom: rgba(41, 92, 172, 0.62);
+  --mode-project-ring: rgba(147, 206, 255, 0.15);
+  --mode-project-glow: rgba(74, 151, 241, 0.24);
+  --mode-project-hover-bg-top: rgba(103, 179, 255, 0.58);
+  --mode-project-hover-bg-bottom: rgba(50, 110, 196, 0.66);
+  --mode-project-hover-ring: rgba(178, 222, 255, 0.2);
+  --mode-project-hover-glow: rgba(94, 173, 255, 0.3);
+
+  --auto-switch-active-border: #5a9df1;
+  --auto-switch-active-top: #74b4ff;
+  --auto-switch-active-bottom: #3d80d6;
+}
+
+.window-shell.theme-light-blue {
+  --accent-0: #2d9fff;
+  --accent-1: #0f79ff;
+  --accent-2: #1a5cb8;
+
+  --shell-border: #2b86f3;
+  --shell-inner-border: #64a9ff;
+  --frame-border: #2a79d7;
+
+  --button-accent-border: #3586e7;
+  --button-accent-border-hover: #1f71d4;
+
+  --mode-project-bg-top: rgba(66, 148, 255, 0.34);
+  --mode-project-bg-bottom: rgba(38, 100, 190, 0.42);
+  --mode-project-ring: rgba(114, 176, 255, 0.3);
+  --mode-project-glow: rgba(66, 148, 255, 0.28);
+  --mode-project-hover-bg-top: rgba(51, 134, 247, 0.4);
+  --mode-project-hover-bg-bottom: rgba(27, 89, 178, 0.48);
+  --mode-project-hover-ring: rgba(134, 188, 255, 0.35);
+  --mode-project-hover-glow: rgba(49, 128, 241, 0.32);
+
+  --auto-switch-active-border: #2f84eb;
+  --auto-switch-active-top: #5ea6ff;
+  --auto-switch-active-bottom: #2b72d6;
+}
+
+.window-shell.theme-light-red {
+  --accent-0: #df6d74;
+  --accent-1: #b93b42;
+  --accent-2: #8f2830;
+
+  --shell-border: #be4e55;
+  --shell-inner-border: #d47b82;
+  --frame-border: #aa3e45;
+
+  --button-accent-border: #b65c62;
+  --button-accent-border-hover: #a64b52;
+
+  --mode-project-bg-top: rgba(201, 80, 89, 0.32);
+  --mode-project-bg-bottom: rgba(143, 40, 48, 0.42);
+  --mode-project-ring: rgba(208, 108, 116, 0.3);
+  --mode-project-glow: rgba(185, 59, 66, 0.24);
+  --mode-project-hover-bg-top: rgba(188, 63, 72, 0.38);
+  --mode-project-hover-bg-bottom: rgba(134, 35, 43, 0.46);
+  --mode-project-hover-ring: rgba(219, 133, 141, 0.36);
+  --mode-project-hover-glow: rgba(171, 52, 60, 0.28);
+
+  --auto-switch-active-border: #bb4a51;
+  --auto-switch-active-top: #d26b72;
+  --auto-switch-active-bottom: #a13940;
 }

@@ -1,13 +1,15 @@
 import type { I18nKey } from '../state/i18n';
-import type { OperationMode } from '../state/store';
+import type { OperationMode, ThemeMode } from '../state/store';
 
 interface TitlebarProps {
   title: string;
   isTaskRunning: boolean;
   operationMode: OperationMode;
+  themeMode: ThemeMode;
   autoSwitchModeEnabled: boolean;
   isOperationModeDisabled: boolean;
   onToggleOperationMode: () => void;
+  onToggleThemeMode: () => void;
   onToggleAutoSwitchMode: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
@@ -33,13 +35,31 @@ function InfoIcon() {
   );
 }
 
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14.4 2.6a1 1 0 0 0-1.2 1.3 7.6 7.6 0 0 1-9.4 9.4A1 1 0 0 0 2.6 14.6 10 10 0 1 0 14.4 2.6Z" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 2h2v3h-2V2Zm0 17h2v3h-2v-3Zm8-8h3v2h-3v-2ZM2 11h3v2H2v-2Zm14.4-5.8 1.4 1.4-2.1 2.1-1.4-1.4 2.1-2.1Zm-8.8 8.8 1.4 1.4-2.1 2.1-1.4-1.4 2.1-2.1Zm8.8 3.5-2.1-2.1 1.4-1.4 2.1 2.1-1.4 1.4Zm-8.8-8.8-2.1-2.1 1.4-1.4 2.1 2.1-1.4 1.4ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" />
+    </svg>
+  );
+}
+
 export default function Titlebar({
   title,
   isTaskRunning,
   operationMode,
+  themeMode,
   autoSwitchModeEnabled,
   isOperationModeDisabled,
   onToggleOperationMode,
+  onToggleThemeMode,
   onToggleAutoSwitchMode,
   onOpenSettings,
   onOpenAbout,
@@ -58,6 +78,7 @@ export default function Titlebar({
       : t('switchToProjectMode');
   const autoSwitchLabel = autoSwitchModeEnabled ? t('switchToManualMode') : t('switchToAutoSwitchMode');
   const autoSwitchStateLabel = autoSwitchModeEnabled ? t('autoSwitchModeActive') : t('autoSwitchModeInactive');
+  const themeToggleLabel = themeMode === 'dark' ? t('switchToLightTheme') : t('switchToDarkTheme');
   const operationModeButtonDisabled = isOperationModeDisabled || autoSwitchModeEnabled;
 
   return (
@@ -103,6 +124,15 @@ export default function Titlebar({
             <span className="titlebar-auto-switch-track" aria-hidden="true">
               <span className="titlebar-auto-switch-thumb" />
             </span>
+          </button>
+          <button
+            type="button"
+            className="titlebar-icon-btn titlebar-theme-btn"
+            aria-label={themeToggleLabel}
+            title={themeToggleLabel}
+            onClick={onToggleThemeMode}
+          >
+            {themeMode === 'dark' ? <MoonIcon /> : <SunIcon />}
           </button>
           <button
             type="button"

@@ -32,6 +32,7 @@ import {
 import { useI18n } from './state/i18n';
 import {
   DEFAULT_SETTINGS,
+  getThemeMode,
   type AppSettings,
   initSettingsStore,
   loadAppSettings,
@@ -40,6 +41,7 @@ import {
   persistSavedWorkspaceTabs,
   type OperationMode,
   type SavedWorkspaceTab,
+  toggleThemeModePreset,
   type Language
 } from './state/store';
 import type {
@@ -478,7 +480,9 @@ export default function App() {
     return getAutoSwitchOperationMode(activeWorkspace);
   }, [activeWorkspace]);
 
+  const activeThemePreset = isSettingsOpen ? settingsDraft.themePreset : settings.themePreset;
   const isProjectMode = settings.operationMode === 'project';
+  const themeMode = getThemeMode(activeThemePreset);
   const isManagedProjectContext = selectedProject !== null;
   const activeProjectDir = (selectedProject?.rootDir ?? '').trim();
   const activeInterpreterPath = (selectedEnvironment?.interpreterPath ?? '').trim();
@@ -748,6 +752,43 @@ export default function App() {
         ...previous,
         autoSwitchMode: previousAutoSwitch,
         operationMode: previousMode
+      }));
+      await showMessage(t('settingsSaveFailed'), t('dialogErrorTitle'));
+    }
+  };
+
+  const toggleThemeMode = async () => {
+    if (isSettingsSaving) {
+      return;
+    }
+
+    const previousThemePreset = settings.themePreset;
+    const nextThemePreset = toggleThemeModePreset(previousThemePreset);
+
+    setSettings((previous) => ({
+      ...previous,
+      themePreset: nextThemePreset
+    }));
+    setSettingsDraft((previous) => ({
+      ...previous,
+      themePreset: nextThemePreset
+    }));
+
+    try {
+      await persistAppSettings({
+        ...settings,
+        themePreset: nextThemePreset
+      });
+      appendConsole(`[theme] switched to ${nextThemePreset}`);
+    } catch (error) {
+      console.error(error);
+      setSettings((previous) => ({
+        ...previous,
+        themePreset: previousThemePreset
+      }));
+      setSettingsDraft((previous) => ({
+        ...previous,
+        themePreset: previousThemePreset
       }));
       await showMessage(t('settingsSaveFailed'), t('dialogErrorTitle'));
     }
@@ -1983,16 +2024,18 @@ export default function App() {
   const uninstallLabel = selectedPackage ? `${t('uninstall')} ${selectedPackage.name}` : t('uninstall');
 
   return (
-    <div className={`window-shell ${isWindowFocused ? 'is-active' : 'is-inactive'}`}>
+    <div className={`window-shell theme-${activeThemePreset} ${isWindowFocused ? 'is-active' : 'is-inactive'}`}>
       <div className="window-frame">
         <div className="app-window">
           <Titlebar
             title={t('appTitle')}
             isTaskRunning={isJobRunning}
             operationMode={settings.operationMode}
+            themeMode={themeMode}
             autoSwitchModeEnabled={settings.autoSwitchMode}
             isOperationModeDisabled={isOperationModeDisabled}
             onToggleOperationMode={() => void toggleOperationMode()}
+            onToggleThemeMode={() => void toggleThemeMode()}
             onToggleAutoSwitchMode={() => void toggleAutoSwitchMode()}
             onOpenSettings={openSettings}
             onOpenAbout={() => setIsAboutOpen(true)}
