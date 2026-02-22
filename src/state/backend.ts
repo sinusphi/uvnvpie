@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { EnvironmentItem, PackageItem, ProjectFileNode, UvCommandResult } from '../types/domain';
+import type {
+  DependencyGraphPackage,
+  EnvironmentItem,
+  PackageItem,
+  ProjectFileNode,
+  UvCommandResult
+} from '../types/domain';
 
 type RawRecord = Record<string, unknown>;
 
@@ -103,6 +109,20 @@ function normalizeProjectFileNode(value: unknown): ProjectFileNode {
   };
 }
 
+function normalizeDependencyGraphPackage(value: unknown): DependencyGraphPackage {
+  const record = (value ?? {}) as RawRecord;
+  const dependenciesRaw = Array.isArray(record.dependencies) ? record.dependencies : [];
+
+  return {
+    id: asString(record.id),
+    name: asString(record.name),
+    version: asString(record.version),
+    dependencies: dependenciesRaw
+      .map((entry) => asString(entry).trim())
+      .filter((entry) => entry.length > 0)
+  };
+}
+
 export async function fetchEnvironments(envRootDir: string): Promise<EnvironmentItem[]> {
   const response = await invoke<unknown[]>('list_environments', {
     envRootDir: envRootDir.trim() ? envRootDir : null
@@ -133,6 +153,25 @@ export async function fetchEnvironmentPackages(interpreterPath: string): Promise
   return response
     .map(normalizePackage)
     .filter((pkg) => pkg.id && pkg.name)
+    .sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }));
+}
+
+export async function fetchEnvironmentDependencyGraph(interpreterPath: string): Promise<DependencyGraphPackage[]> {
+  if (!interpreterPath.trim()) {
+    return [];
+  }
+
+  const response = await invoke<unknown[]>('list_environment_dependency_graph', {
+    interpreterPath
+  });
+
+  if (!Array.isArray(response)) {
+    return [];
+  }
+
+  return response
+    .map(normalizeDependencyGraphPackage)
+    .filter((entry) => entry.id && entry.name)
     .sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }));
 }
 
