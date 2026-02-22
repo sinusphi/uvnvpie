@@ -10,6 +10,7 @@ import DetailsPanel from './components/DetailsPanel';
 import HeaderPanel from './components/HeaderPanel';
 import InterpreterCard from './components/InterpreterCard';
 import PackagesTable from './components/PackagesTable';
+import SecurityPanel from './components/SecurityPanel';
 import SettingsDialog from './components/SettingsDialog';
 import Sidebar from './components/Sidebar';
 import Tabs from './components/Tabs';
@@ -31,6 +32,7 @@ import {
   runUvUpgrade
 } from './state/backend';
 import { useI18n } from './state/i18n';
+import { scanSecurityFindings } from './state/security';
 import {
   DEFAULT_SETTINGS,
   getThemeMode,
@@ -53,6 +55,7 @@ import type {
   ProjectFileNode,
   ProjectItem,
   ProjectOperationTarget,
+  SecurityFinding,
   UvCommandResult
 } from './types/domain';
 
@@ -91,11 +94,27 @@ interface WorkspaceTabState {
   showInEnvironments: boolean;
 }
 
+interface EnvironmentSecurityState {
+  isScanning: boolean;
+  findings: SecurityFinding[];
+  error: string;
+  scannedAt: string;
+  packagesScanned: number;
+}
+
 const INITIAL_CONSOLE_LINES = [
   '[boot] ui initialized',
   '[boot] waiting for environment scan',
   '[ready] waiting for user action'
 ];
+
+const DEFAULT_ENVIRONMENT_SECURITY_STATE: EnvironmentSecurityState = {
+  isScanning: false,
+  findings: [],
+  error: '',
+  scannedAt: '',
+  packagesScanned: 0
+};
 
 function splitOutputChunk(buffered: string, chunk: string): { lines: string[]; remainder: string } {
   const normalized = `${buffered}${chunk}`.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -201,6 +220,10 @@ export default function App() {
   const [packagesByEnvironment, setPackagesByEnvironment] = useState<Record<string, PackageItem[]>>({});
   const [selectedPackageIdByWorkspace, setSelectedPackageIdByWorkspace] = useState<Record<string, string>>({});
   const [mainTabByWorkspace, setMainTabByWorkspace] = useState<Record<string, MainTab>>({});
+  const [securityByEnvironment, setSecurityByEnvironment] = useState<Record<string, EnvironmentSecurityState>>({});
+  const [selectedSecurityFindingIdByEnvironment, setSelectedSecurityFindingIdByEnvironment] = useState<
+    Record<string, string>
+  >({});
 
   const [uvVersion, setUvVersion] = useState('...');
   const [consoleLines, setConsoleLines] = useState<string[]>(INITIAL_CONSOLE_LINES);
@@ -555,6 +578,22 @@ export default function App() {
     return packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
   }, [packages, selectedPackageId]);
 
+  const activeEnvironmentSecurity = useMemo<EnvironmentSecurityState>(() => {
+    if (!selectedEnvironment) {
+      return DEFAULT_ENVIRONMENT_SECURITY_STATE;
+    }
+
+    return securityByEnvironment[selectedEnvironment.id] ?? DEFAULT_ENVIRONMENT_SECURITY_STATE;
+  }, [selectedEnvironment, securityByEnvironment]);
+
+  const activeSecurityFindingId = useMemo(() => {
+    if (!selectedEnvironment) {
+      return '';
+    }
+
+    return selectedSecurityFindingIdByEnvironment[selectedEnvironment.id] ?? '';
+  }, [selectedEnvironment, selectedSecurityFindingIdByEnvironment]);
+
   const selectedProject = useMemo(() => {
     if (!activeWorkspace) {
       return null;
@@ -608,6 +647,8 @@ export default function App() {
   const toolbarModeActionsDisabled = isJobRunning || !hasModeActionTarget;
   const toolbarPackageActionsDisabled = toolbarModeActionsDisabled || !selectedPackage;
   const projectOnlyActionsDisabled = isJobRunning || !activeProjectDir || !isProjectMode;
+  const securityScanDisabled =
+    isJobRunning || !selectedEnvironment || packages.length === 0 || activeEnvironmentSecurity.isScanning;
   const isOperationModeDisabled = isJobRunning || isSettingsSaving;
 
   const tabs = useMemo(
@@ -1233,6 +1274,101 @@ export default function App() {
     }));
   };
 
+  const updateEnvironmentSecurityState = (
+    environmentId: string,
+    updater: (previous: EnvironmentSecurityState) => EnvironmentSecurityState
+  ) => {
+    setSecurityByEnvironment((previous) => {
+      const previousState = previous[environmentId] ?? DEFAULT_ENVIRONMENT_SECURITY_STATE;
+      return {
+        ...previous,
+        [environmentId]: updater(previousState)
+      };
+    });
+  };
+
+  const handleSelectSecurityFinding = (findingId: string) => {
+    if (!selectedEnvironment) {
+      return;
+    }
+
+    setSelectedSecurityFindingIdByEnvironment((previous) => ({
+      ...previous,
+      [selectedEnvironment.id]: findingId
+    }));
+  };
+
+  const handleScanSecurity = async () => {
+    if (!selectedEnvironment || activeEnvironmentSecurity.isScanning || isJobRunning) {
+      return;
+    }
+
+    const environment = selectedEnvironment;
+    const environmentId = environment.id;
+    const scanPackages = packages
+      .map((pkg) => ({
+        ...pkg,
+        name: pkg.name.trim(),
+        version: pkg.version.trim()
+      }))
+      .filter((pkg) => pkg.name && pkg.version);
+
+    if (scanPackages.length === 0) {
+      updateEnvironmentSecurityState(environmentId, (previous) => ({
+        ...previous,
+        isScanning: false,
+        error: '',
+        findings: [],
+        scannedAt: new Date().toISOString(),
+        packagesScanned: 0
+      }));
+      setSelectedSecurityFindingIdByEnvironment((previous) => ({
+        ...previous,
+        [environmentId]: ''
+      }));
+      appendConsole(`[security] no packages available for ${environment.name}`);
+      return;
+    }
+
+    updateEnvironmentSecurityState(environmentId, (previous) => ({
+      ...previous,
+      isScanning: true,
+      error: ''
+    }));
+    appendConsole(`[security] scanning ${scanPackages.length} package(s) for ${environment.name}`);
+    await waitForUiFrame();
+
+    try {
+      const findings = await scanSecurityFindings(scanPackages);
+      const scannedAt = new Date().toISOString();
+
+      updateEnvironmentSecurityState(environmentId, () => ({
+        isScanning: false,
+        findings,
+        error: '',
+        scannedAt,
+        packagesScanned: scanPackages.length
+      }));
+      setSelectedSecurityFindingIdByEnvironment((previous) => ({
+        ...previous,
+        [environmentId]: findings[0]?.id ?? ''
+      }));
+
+      appendConsole(
+        `[security] found ${findings.length} vulnerabilit${findings.length === 1 ? 'y' : 'ies'} for ${environment.name}`
+      );
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error ?? 'Unknown security scan error');
+      updateEnvironmentSecurityState(environmentId, (previous) => ({
+        ...previous,
+        isScanning: false,
+        error: messageText,
+        packagesScanned: scanPackages.length
+      }));
+      appendConsole(`[security] scan failed for ${environment.name}: ${messageText}`);
+    }
+  };
+
   const appendCommandOutput = (channel: CommandOutputChannel, output: string) => {
     const lines = output
       .split(/\r?\n|\r/g)
@@ -1680,6 +1816,8 @@ export default function App() {
       return;
     }
 
+    const removedWorkspaceTab = workspaceTabs[targetIndex];
+    const removedEnvironmentIds = new Set(removedWorkspaceTab.environments.map((environment) => environment.id));
     const nextTabs = workspaceTabs.filter((tab) => tab.id !== workspaceId);
     setWorkspaceTabs(nextTabs);
 
@@ -1705,6 +1843,40 @@ export default function App() {
       const { [workspaceId]: _removedPackageId, ...rest } = previous;
       return rest;
     });
+
+    if (removedEnvironmentIds.size > 0) {
+      setSecurityByEnvironment((previous) => {
+        const next = { ...previous };
+        let changed = false;
+
+        for (const environmentId of removedEnvironmentIds) {
+          if (!(environmentId in next)) {
+            continue;
+          }
+
+          delete next[environmentId];
+          changed = true;
+        }
+
+        return changed ? next : previous;
+      });
+
+      setSelectedSecurityFindingIdByEnvironment((previous) => {
+        const next = { ...previous };
+        let changed = false;
+
+        for (const environmentId of removedEnvironmentIds) {
+          if (!(environmentId in next)) {
+            continue;
+          }
+
+          delete next[environmentId];
+          changed = true;
+        }
+
+        return changed ? next : previous;
+      });
+    }
 
     if (editingWorkspaceTabId === workspaceId) {
       setEditingWorkspaceTabId(null);
@@ -1872,6 +2044,8 @@ export default function App() {
       setActiveWorkspaceTabId('');
       setMainTabByWorkspace({});
       setSelectedPackageIdByWorkspace({});
+      setSecurityByEnvironment({});
+      setSelectedSecurityFindingIdByEnvironment({});
       setPackagesByEnvironment({});
       setEditingWorkspaceTabId(null);
       setEditingWorkspaceName('');
@@ -1897,6 +2071,8 @@ export default function App() {
           setActiveWorkspaceTabId(initialTab.id);
           setMainTabByWorkspace({ [initialTab.id]: 'packages' });
           setSelectedPackageIdByWorkspace({ [initialTab.id]: '' });
+          setSecurityByEnvironment({});
+          setSelectedSecurityFindingIdByEnvironment({});
           setPackagesByEnvironment({});
           setEditingWorkspaceTabId(null);
           setEditingWorkspaceName('');
@@ -1926,6 +2102,8 @@ export default function App() {
         setSelectedPackageIdByWorkspace(
           Object.fromEntries(restoredTabs.map((tab) => [tab.id, ''] as const)) as Record<string, string>
         );
+        setSecurityByEnvironment({});
+        setSelectedSecurityFindingIdByEnvironment({});
         setPackagesByEnvironment({});
         setEditingWorkspaceTabId(null);
         setEditingWorkspaceName('');
@@ -2354,6 +2532,21 @@ export default function App() {
                           Sync
                         </button>
                       </div>
+                    ) : activeMainTab === 'security' ? (
+                      <div className="packages-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={securityScanDisabled}
+                          onClick={() => void handleScanSecurity()}
+                        >
+                          {activeEnvironmentSecurity.isScanning
+                            ? t('securityScanningButton')
+                            : activeEnvironmentSecurity.scannedAt
+                              ? t('securityRescan')
+                              : t('securityScan')}
+                        </button>
+                      </div>
                     ) : null}
                   </div>
 
@@ -2364,6 +2557,18 @@ export default function App() {
                       onSelectPackage={handleSelectPackage}
                       t={t}
                     />
+                  ) : activeMainTab === 'security' ? (
+                    <SecurityPanel
+                      findings={activeEnvironmentSecurity.findings}
+                      selectedFindingId={activeSecurityFindingId}
+                      onSelectFinding={handleSelectSecurityFinding}
+                      isScanning={activeEnvironmentSecurity.isScanning}
+                      scanError={activeEnvironmentSecurity.error}
+                      scannedAt={activeEnvironmentSecurity.scannedAt}
+                      packagesScanned={activeEnvironmentSecurity.packagesScanned}
+                      currentPackageCount={packages.length}
+                      t={t}
+                    />
                   ) : (
                     <div className="packages-placeholder">
                       <p>
@@ -2371,7 +2576,7 @@ export default function App() {
                           ? t('dependencyTreePlaceholder')
                           : activeMainTab === 'requirements'
                             ? t('requirementsPlaceholder')
-                            : t('securityPlaceholder')}
+                            : t('placeholder')}
                       </p>
                     </div>
                   )}
