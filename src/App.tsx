@@ -55,7 +55,7 @@ import type {
   UvCommandResult
 } from './types/domain';
 
-type MainTab = 'packages' | 'dependencyTree' | 'requirements';
+type MainTab = 'packages' | 'dependencyTree' | 'requirements' | 'security';
 
 interface WorkspaceTabState {
   id: string;
@@ -527,7 +527,8 @@ export default function App() {
     () => [
       { key: 'packages' as const, label: t('packagesTab') },
       { key: 'dependencyTree' as const, label: t('dependencyTreeTab') },
-      { key: 'requirements' as const, label: t('requirementsTab') }
+      { key: 'requirements' as const, label: t('requirementsTab') },
+      { key: 'security' as const, label: t('securityTab') }
     ],
     [t]
   );
@@ -2170,7 +2171,13 @@ export default function App() {
                     />
                   ) : (
                     <div className="packages-placeholder">
-                      <p>{activeMainTab === 'dependencyTree' ? t('dependencyTreePlaceholder') : t('requirementsPlaceholder')}</p>
+                      <p>
+                        {activeMainTab === 'dependencyTree'
+                          ? t('dependencyTreePlaceholder')
+                          : activeMainTab === 'requirements'
+                            ? t('requirementsPlaceholder')
+                            : t('securityPlaceholder')}
+                      </p>
                     </div>
                   )}
                 </section>
