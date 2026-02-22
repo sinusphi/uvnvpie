@@ -25,6 +25,13 @@ fn list_environment_packages(interpreter_path: String) -> Result<Vec<uv::Package
 }
 
 #[tauri::command(rename_all = "camelCase")]
+fn list_environment_dependency_graph(
+    interpreter_path: String,
+) -> Result<Vec<uv::DependencyGraphPackage>, String> {
+    uv::list_environment_dependency_graph(interpreter_path)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn is_valid_project_root(project_dir: String) -> Result<bool, String> {
     uv::is_valid_project_root(project_dir)
 }
@@ -312,6 +319,7 @@ fn main() {
             get_uv_version,
             list_environments,
             list_environment_packages,
+            list_environment_dependency_graph,
             is_valid_project_root,
             list_project_files,
             uv_add,
