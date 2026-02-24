@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { message, save } from '@tauri-apps/plugin-dialog';
 import type { I18nKey } from '../state/i18n';
+import { writeTextFile } from '../state/backend';
 import type { PackageItem } from '../types/domain';
 
 interface RequirementsPanelProps {
@@ -76,15 +78,40 @@ export default function RequirementsPanel({ packages, environmentName, t }: Requ
     }, 1500);
   };
 
-  const handleDownload = () => {
+  const handleBrowserDownload = (fileName: string) => {
     const blob = new Blob([requirementsText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const baseName = normalizeFileName(environmentName);
     link.href = url;
-    link.download = `${baseName}.requirements.txt`;
+    link.download = fileName;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExport = async () => {
+    const baseName = normalizeFileName(environmentName);
+    const fileName = `${baseName}.requirements.txt`;
+
+    try {
+      const selectedPath = await save({
+        title: t('exportRequirements'),
+        defaultPath: fileName,
+        filters: [{ name: 'Text', extensions: ['txt'] }]
+      });
+
+      if (!selectedPath) {
+        return;
+      }
+
+      await writeTextFile(selectedPath, requirementsText);
+    } catch (error) {
+      try {
+        handleBrowserDownload(fileName);
+      } catch {
+        const errorMessage = error instanceof Error ? error.message : `Failed to export requirements: ${String(error)}`;
+        await message(errorMessage, { title: t('dialogErrorTitle') });
+      }
+    }
   };
 
   return (
@@ -111,7 +138,7 @@ export default function RequirementsPanel({ packages, environmentName, t }: Requ
             type="button"
             className="secondary-button"
             disabled={sortedPackages.length === 0}
-            onClick={() => handleDownload()}
+            onClick={() => void handleExport()}
           >
             {t('requirementsDownload')}
           </button>

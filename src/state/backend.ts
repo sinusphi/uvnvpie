@@ -210,6 +210,22 @@ export async function fetchProjectFiles(projectDir: string): Promise<ProjectFile
     .filter((entry) => entry.id && entry.path && entry.name);
 }
 
+export async function writeTextFile(filePath: string, contents: string): Promise<void> {
+  const normalized = filePath.trim();
+  if (!normalized) {
+    throw new Error('File path is empty');
+  }
+
+  try {
+    await invoke<unknown>('write_text_file', {
+      filePath: normalized,
+      contents
+    });
+  } catch (error) {
+    throw new Error(`[write_text_file] ${toErrorMessage(error)}`);
+  }
+}
+
 export async function runUvAdd(
   projectDir: string,
   requirement: string,

@@ -41,6 +41,33 @@ fn list_project_files(project_dir: String) -> Result<Vec<uv::ProjectFileNode>, S
     uv::list_project_files(project_dir)
 }
 
+#[tauri::command(rename_all = "camelCase")]
+fn write_text_file(file_path: String, contents: String) -> Result<(), String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let normalized = file_path.trim();
+    if normalized.is_empty() {
+        return Err("File path is empty".to_string());
+    }
+
+    let path = PathBuf::from(normalized);
+
+    if let Some(parent_dir) = path.parent() {
+        if !parent_dir.as_os_str().is_empty() {
+            fs::create_dir_all(parent_dir).map_err(|error| {
+                format!(
+                    "Failed to create parent directory '{}': {error}",
+                    parent_dir.display()
+                )
+            })?;
+        }
+    }
+
+    fs::write(&path, contents)
+        .map_err(|error| format!("Failed to write file '{}': {error}", path.display()))
+}
+
 async fn run_uv_blocking<F>(task_name: &'static str, task: F) -> Result<uv::UvCommandResult, String>
 where
     F: FnOnce() -> Result<uv::UvCommandResult, String> + Send + 'static,
@@ -322,6 +349,7 @@ fn main() {
             list_environment_dependency_graph,
             is_valid_project_root,
             list_project_files,
+            write_text_file,
             uv_add,
             uv_lock,
             uv_sync,
