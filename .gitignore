@@ -4,6 +4,7 @@ dist/
 node_modules/
 src-tauri/target/
 .test_envs/
+website/
 
 .env*
 .DS_Store
