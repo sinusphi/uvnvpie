@@ -9,5 +9,6 @@ website/
 .env*
 .DS_Store
 CODEX.md
+NOTE.md
 current_project_branch.md
 .site
