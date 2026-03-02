@@ -51,7 +51,7 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "../assets/logo.png"
+      "../assets/uvnv_logo.png"
     ]
   }
 }

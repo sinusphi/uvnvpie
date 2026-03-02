@@ -25,6 +25,13 @@ fn list_environment_packages(interpreter_path: String) -> Result<Vec<uv::Package
 }
 
 #[tauri::command(rename_all = "camelCase")]
+fn list_environment_dependency_graph(
+    interpreter_path: String,
+) -> Result<Vec<uv::DependencyGraphPackage>, String> {
+    uv::list_environment_dependency_graph(interpreter_path)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn is_valid_project_root(project_dir: String) -> Result<bool, String> {
     uv::is_valid_project_root(project_dir)
 }
@@ -35,92 +42,212 @@ fn list_project_files(project_dir: String) -> Result<Vec<uv::ProjectFileNode>, S
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_add(
+fn write_text_file(file_path: String, contents: String) -> Result<(), String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let normalized = file_path.trim();
+    if normalized.is_empty() {
+        return Err("File path is empty".to_string());
+    }
+
+    let path = PathBuf::from(normalized);
+
+    if let Some(parent_dir) = path.parent() {
+        if !parent_dir.as_os_str().is_empty() {
+            fs::create_dir_all(parent_dir).map_err(|error| {
+                format!(
+                    "Failed to create parent directory '{}': {error}",
+                    parent_dir.display()
+                )
+            })?;
+        }
+    }
+
+    fs::write(&path, contents)
+        .map_err(|error| format!("Failed to write file '{}': {error}", path.display()))
+}
+
+async fn run_uv_blocking<F>(task_name: &'static str, task: F) -> Result<uv::UvCommandResult, String>
+where
+    F: FnOnce() -> Result<uv::UvCommandResult, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|error| format!("Failed to join {task_name} task: {error}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn uv_add(
+    window: tauri::Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     requirement: String,
     dev: bool,
     optional_group: Option<String>,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_add(
-        project_dir,
-        uv_binary_path,
-        requirement,
-        dev,
-        optional_group,
-    )
+    run_uv_blocking("uv_add", move || {
+        uv::uv_add(
+            &window,
+            project_dir,
+            uv_binary_path,
+            requirement,
+            dev,
+            optional_group,
+            stream_id,
+        )
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_lock(
+async fn uv_lock(
+    window: tauri::Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     check_only: bool,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_lock(project_dir, uv_binary_path, check_only)
+    run_uv_blocking("uv_lock", move || {
+        uv::uv_lock(&window, project_dir, uv_binary_path, check_only, stream_id)
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_sync(
+async fn uv_sync(
+    window: tauri::Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     frozen: bool,
     no_dev: bool,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_sync(project_dir, uv_binary_path, frozen, no_dev)
+    run_uv_blocking("uv_sync", move || {
+        uv::uv_sync(
+            &window,
+            project_dir,
+            uv_binary_path,
+            frozen,
+            no_dev,
+            stream_id,
+        )
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_upgrade(
+async fn uv_upgrade(
+    window: tauri::Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_upgrade(project_dir, uv_binary_path, package_name)
+    run_uv_blocking("uv_upgrade", move || {
+        uv::uv_upgrade(
+            &window,
+            project_dir,
+            uv_binary_path,
+            package_name,
+            stream_id,
+        )
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_uninstall(
+async fn uv_uninstall(
+    window: tauri::Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_uninstall(project_dir, uv_binary_path, package_name)
+    run_uv_blocking("uv_uninstall", move || {
+        uv::uv_uninstall(
+            &window,
+            project_dir,
+            uv_binary_path,
+            package_name,
+            stream_id,
+        )
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_direct_install(
+async fn uv_direct_install(
+    window: tauri::Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
     requirement: String,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_direct_install(interpreter_path, uv_binary_path, requirement)
+    run_uv_blocking("uv_direct_install", move || {
+        uv::uv_direct_install(
+            &window,
+            interpreter_path,
+            uv_binary_path,
+            requirement,
+            stream_id,
+        )
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_direct_upgrade(
+async fn uv_direct_upgrade(
+    window: tauri::Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_direct_upgrade(interpreter_path, uv_binary_path, package_name)
+    run_uv_blocking("uv_direct_upgrade", move || {
+        uv::uv_direct_upgrade(
+            &window,
+            interpreter_path,
+            uv_binary_path,
+            package_name,
+            stream_id,
+        )
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_direct_uninstall(
+async fn uv_direct_uninstall(
+    window: tauri::Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_direct_uninstall(interpreter_path, uv_binary_path, package_name)
+    run_uv_blocking("uv_direct_uninstall", move || {
+        uv::uv_direct_uninstall(
+            &window,
+            interpreter_path,
+            uv_binary_path,
+            package_name,
+            stream_id,
+        )
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn uv_direct_update_all(
+async fn uv_direct_update_all(
+    window: tauri::Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
+    stream_id: Option<String>,
 ) -> Result<uv::UvCommandResult, String> {
-    uv::uv_direct_update_all(interpreter_path, uv_binary_path)
+    run_uv_blocking("uv_direct_update_all", move || {
+        uv::uv_direct_update_all(&window, interpreter_path, uv_binary_path, stream_id)
+    })
+    .await
 }
 
 #[cfg(target_os = "linux")]
@@ -219,8 +346,10 @@ fn main() {
             get_uv_version,
             list_environments,
             list_environment_packages,
+            list_environment_dependency_graph,
             is_valid_project_root,
             list_project_files,
+            write_text_file,
             uv_add,
             uv_lock,
             uv_sync,

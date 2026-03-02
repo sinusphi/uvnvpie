@@ -1,46 +1,70 @@
 # uvnvpie
 
 <p align="center">
-  <img src="assets/shot_01.png" alt="screenshot 01" />
+  <img src="assets/shot_05.png" alt="uvnvpie screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/shot_02.png" alt="uvnvpie screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/shot_01.png" alt="uvnvpie screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/shot_03.png" alt="uvnvpie screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/shot_04.png" alt="uvnvpie screenshot" />
 </p>
 
 EN | [DE](README.de.md)
 
-[![Rust: 1.77+](https://img.shields.io/badge/Rust-1.77%2B-brown?logo=rust&logoColor=gold)](https://www.rust-lang.org) 
-[![Tauri: 2.x](https://img.shields.io/badge/Tauri-2.x-yellow?logo=tauri&logoColor=cyan)](https://v2.tauri.app) 
-[![Node.js: 20+](https://img.shields.io/badge/Node.js-20%2B-darkgreen?logo=node.js&logoColor=green)](https://nodejs.org/en) 
-[![pnpm: 9.x](https://img.shields.io/badge/pnpm-9.x-blue?logo=pnpm&logoColor=green)](https://pnpm.io) 
-[![React: 18.3.1](https://img.shields.io/badge/React-18.3.1-darkcyan?logo=react&logoColor=cyan)](https://react.dev) 
-[![Vite: 7.3.1](https://img.shields.io/badge/Vite-7.3.1-purple?logo=vite&logoColor=gold)](https://vite.dev) 
-[![Tailwind: 3.4.14](https://img.shields.io/badge/Tailwind-3.4.14-orange?logo=tailwindcss&logoColor=cyan)](https://tailwindcss.com) 
-[![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou) 
+[![Rust: 1.77+](https://img.shields.io/badge/Rust-1.77%2B-brown?logo=rust&logoColor=gold)](https://www.rust-lang.org)
+[![Tauri: 2.x](https://img.shields.io/badge/Tauri-2.x-yellow?logo=tauri&logoColor=cyan)](https://v2.tauri.app)
+[![Node.js: 20+](https://img.shields.io/badge/Node.js-20%2B-darkgreen?logo=node.js&logoColor=green)](https://nodejs.org/en)
+[![pnpm: 9.x](https://img.shields.io/badge/pnpm-9.x-blue?logo=pnpm&logoColor=green)](https://pnpm.io)
+[![React: 18.3.1](https://img.shields.io/badge/React-18.3.1-darkcyan?logo=react&logoColor=cyan)](https://react.dev)
+[![Vite: 7.3.1](https://img.shields.io/badge/Vite-7.3.1-purple?logo=vite&logoColor=gold)](https://vite.dev)
+[![Tailwind: 3.4.14](https://img.shields.io/badge/Tailwind-3.4.14-orange?logo=tailwindcss&logoColor=cyan)](https://tailwindcss.com)
+[![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou)
 
-Next-gen virtual environment manager for Python. Built with Rust + Tauri and leveraging uv for ultra-fast dependency handling. Designed for developers who want the best performance and full control.
+Next-gen virtual environment manager for Python.
+Built with Rust + Tauri, using `uv` as execution backend.
 
 ## Project Status
 
 | Area | Status |
 | --- | --- |
-| Version | **v0.1.1** / **2026-02-17** |
+| Version | **v0.1.1** |
 | Platforms | Linux, Windows |
-| Live Data | Environments, package lists, `uv --version` |
-| Package Actions | Available in the UI, currently simulated |
+| Runtime | Desktop app (Tauri v2) |
+| Data Sources | Local Python metadata + `uv` + OSV API |
 
-## Features
+## What Works Today
 
-- Complete main window with sidebar, header, tabs, package table, details, actions, and console area.
-- Detection of local Python environments and loading installed packages per environment.
-- Settings dialog with persistence via `tauri-plugin-store`.
-- Folder/file picker via `tauri-plugin-dialog`.
-- In-app language switching between German and English.
-- Custom title bar with minimize/maximize/close.
+- Environment discovery from configurable root folders.
+- Package inventory per selected environment.
+- Dependency Tree tab with live graph metadata from interpreter packages.
+- Requirements tab with generated preview, copy, and file export.
+- Security tab with live OSV vulnerability scan and detailed finding view.
+- Real `uv` command execution for package management actions in the main package toolbar.
+- Streaming command output into the integrated console panel.
+- Project mode, Direct mode, and Auto Switch mode in the title bar.
+- Settings persistence via `tauri-plugin-store`.
+- Native folder/file dialogs via `tauri-plugin-dialog`.
+- Multi-workspace sidebar model for Environments and Projects.
 
 ## Requirements
 
 - **Node.js** 20+
 - **pnpm** 9+
 - **Rust** stable (1.77+)
-- **Tauri** system prerequisites according to official docs:  
+- **Python** installed (for environment introspection)
+- **uv** available in `PATH` or configured in app settings
+- **Tauri** system prerequisites:
   https://v2.tauri.app/start/prerequisites/
 
 ## Installation
@@ -51,13 +75,13 @@ pnpm install
 
 ## Development
 
-Start the full desktop app:
+Run full desktop app:
 
 ```bash
 pnpm tauri dev
 ```
 
-Start frontend only (Vite):
+Run frontend only:
 
 ```bash
 pnpm dev
@@ -72,41 +96,66 @@ pnpm tauri build
 ## Usage
 
 1. Start the app with `pnpm tauri dev`.
-2. Optionally set a custom environment root in settings.
-3. Select an environment from the sidebar.
-4. Inspect packages, details, and console output in the main area.
+2. Open one or more root folders from the sidebar actions.
+3. Select an environment.
+4. Use tabs to inspect:
+   - `Packages` (table + detail panel)
+   - `Dependency Tree`
+   - `Requirements` (copy/export)
+   - `Security` (OSV scan)
+5. Run package actions from the package toolbar; monitor output in the console panel.
 
 ## Environment Detection
 
-If an environment root directory is set in settings, only that path is scanned.  
-Without an explicit root, the app uses these defaults:
+If an explicit environment root is configured, only that root is scanned.
+Without an explicit root, these defaults are used:
 
 - `~/.virtualenvs`
 - `~/.venvs`
 - `~/venvs`
 
-An environment is detected when an interpreter exists at one of these paths:
+An environment is recognized when one interpreter file exists:
 
 - `<env>/bin/python`
 - `<env>/bin/python3`
 - `<env>/Scripts/python.exe`
 - `<env>/Scripts/python`
 
-## Architecture
+## Requirements Export
 
-- Frontend: React + TypeScript + Vite + Tailwind
-- Desktop Runtime: Tauri v2
-- Backend Commands (Rust):
-  - `get_uv_version`
-  - `list_environments`
-  - `list_environment_packages`
+Requirements export in the Requirements tab now uses:
+
+1. Native save dialog (`tauri-plugin-dialog`)
+2. Backend write command (`write_text_file`)
+
+If native export fails in a runtime edge case, a browser-style download fallback is used.
+
+## Backend Command Surface (Rust)
+
+- `get_uv_version`
+- `list_environments`
+- `list_environment_packages`
+- `list_environment_dependency_graph`
+- `is_valid_project_root`
+- `list_project_files`
+- `write_text_file`
+- `uv_add`
+- `uv_lock`
+- `uv_sync`
+- `uv_upgrade`
+- `uv_uninstall`
+- `uv_direct_install`
+- `uv_direct_upgrade`
+- `uv_direct_uninstall`
+- `uv_direct_update_all`
 
 ## Known Limitations
 
-- `Install`, `Upgrade`, `Uninstall`, `Update All`, and `Export Requirements` are currently mock actions.
-- `Dependency Tree` and `Requirements` tabs are placeholders.
-- The `uvBinaryPath` setting is persisted but currently not used for command execution.
-- The `Latest` column currently shows the same value as `Version`.
+- The secondary **Actions** panel in the lower-right package area still triggers mock jobs.
+  Primary package toolbar actions are the wired `uv` execution path.
+- The `Latest` package column currently mirrors the installed `Version`.
+- Security scan depends on external OSV services and requires network access.
+- Environment discovery scans only first-level child directories inside each configured root.
 
 ## Changelog
 

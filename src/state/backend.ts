@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { EnvironmentItem, PackageItem, ProjectFileNode, UvCommandResult } from '../types/domain';
+import type {
+  DependencyGraphPackage,
+  EnvironmentItem,
+  PackageItem,
+  ProjectFileNode,
+  UvCommandResult
+} from '../types/domain';
 
 type RawRecord = Record<string, unknown>;
 
@@ -103,6 +109,20 @@ function normalizeProjectFileNode(value: unknown): ProjectFileNode {
   };
 }
 
+function normalizeDependencyGraphPackage(value: unknown): DependencyGraphPackage {
+  const record = (value ?? {}) as RawRecord;
+  const dependenciesRaw = Array.isArray(record.dependencies) ? record.dependencies : [];
+
+  return {
+    id: asString(record.id),
+    name: asString(record.name),
+    version: asString(record.version),
+    dependencies: dependenciesRaw
+      .map((entry) => asString(entry).trim())
+      .filter((entry) => entry.length > 0)
+  };
+}
+
 export async function fetchEnvironments(envRootDir: string): Promise<EnvironmentItem[]> {
   const response = await invoke<unknown[]>('list_environments', {
     envRootDir: envRootDir.trim() ? envRootDir : null
@@ -133,6 +153,25 @@ export async function fetchEnvironmentPackages(interpreterPath: string): Promise
   return response
     .map(normalizePackage)
     .filter((pkg) => pkg.id && pkg.name)
+    .sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }));
+}
+
+export async function fetchEnvironmentDependencyGraph(interpreterPath: string): Promise<DependencyGraphPackage[]> {
+  if (!interpreterPath.trim()) {
+    return [];
+  }
+
+  const response = await invoke<unknown[]>('list_environment_dependency_graph', {
+    interpreterPath
+  });
+
+  if (!Array.isArray(response)) {
+    return [];
+  }
+
+  return response
+    .map(normalizeDependencyGraphPackage)
+    .filter((entry) => entry.id && entry.name)
     .sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }));
 }
 
@@ -171,6 +210,22 @@ export async function fetchProjectFiles(projectDir: string): Promise<ProjectFile
     .filter((entry) => entry.id && entry.path && entry.name);
 }
 
+export async function writeTextFile(filePath: string, contents: string): Promise<void> {
+  const normalized = filePath.trim();
+  if (!normalized) {
+    throw new Error('File path is empty');
+  }
+
+  try {
+    await invoke<unknown>('write_text_file', {
+      filePath: normalized,
+      contents
+    });
+  } catch (error) {
+    throw new Error(`[write_text_file] ${toErrorMessage(error)}`);
+  }
+}
+
 export async function runUvAdd(
   projectDir: string,
   requirement: string,
@@ -178,6 +233,7 @@ export async function runUvAdd(
     uvBinaryPath?: string;
     dev?: boolean;
     optionalGroup?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_add', {
@@ -185,7 +241,8 @@ export async function runUvAdd(
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
     requirement,
     dev: Boolean(options?.dev),
-    optionalGroup: normalizeOptionalString(options?.optionalGroup)
+    optionalGroup: normalizeOptionalString(options?.optionalGroup),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -194,12 +251,14 @@ export async function runUvLock(
   options?: {
     uvBinaryPath?: string;
     checkOnly?: boolean;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_lock', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    checkOnly: Boolean(options?.checkOnly)
+    checkOnly: Boolean(options?.checkOnly),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -209,13 +268,15 @@ export async function runUvSync(
     uvBinaryPath?: string;
     frozen?: boolean;
     noDev?: boolean;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_sync', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
     frozen: Boolean(options?.frozen),
-    noDev: Boolean(options?.noDev)
+    noDev: Boolean(options?.noDev),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -224,12 +285,14 @@ export async function runUvUpgrade(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_upgrade', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -238,12 +301,14 @@ export async function runUvUninstall(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_uninstall', {
     projectDir,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -252,12 +317,14 @@ export async function runUvDirectInstall(
   requirement: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_install', {
     interpreterPath,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    requirement
+    requirement,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -266,12 +333,14 @@ export async function runUvDirectUpgrade(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_upgrade', {
     interpreterPath,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -280,12 +349,14 @@ export async function runUvDirectUninstall(
   packageName: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_uninstall', {
     interpreterPath,
     uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
-    packageName
+    packageName,
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }
 
@@ -293,10 +364,12 @@ export async function runUvDirectUpdateAll(
   interpreterPath: string,
   options?: {
     uvBinaryPath?: string;
+    streamId?: string;
   }
 ): Promise<UvCommandResult> {
   return invokeUvCommand('uv_direct_update_all', {
     interpreterPath,
-    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath)
+    uvBinaryPath: normalizeOptionalString(options?.uvBinaryPath),
+    streamId: normalizeOptionalString(options?.streamId)
   });
 }

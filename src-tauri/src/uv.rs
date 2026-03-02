@@ -1,8 +1,12 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::env;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
+use tauri::{Emitter, Window};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,12 +32,43 @@ pub struct PackageItem {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DependencyGraphPackage {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub dependencies: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UvCommandResult {
     pub success: bool,
     pub exit_code: i32,
     pub stdout: String,
     pub stderr: String,
     pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UvCommandOutputEvent {
+    stream_id: String,
+    channel: String,
+    chunk: String,
+}
+
+#[derive(Debug)]
+struct CommandRunResult {
+    success: bool,
+    exit_code: i32,
+    stdout: String,
+    stderr: String,
+}
+
+#[derive(Clone)]
+struct CommandStreamTarget {
+    window: Window,
+    stream_id: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,6 +97,19 @@ struct RawPackageItem {
 #[derive(Debug, Deserialize)]
 struct RawOutdatedPackageItem {
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawDependencyGraphItem {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    dependencies: Vec<String>,
 }
 
 const PACKAGE_QUERY_SCRIPT: &str = r#"
@@ -103,6 +151,54 @@ packages.sort(key=lambda item: item["name"].lower())
 print(json.dumps(packages))
 "#;
 
+const DEPENDENCY_TREE_QUERY_SCRIPT: &str = r#"
+import json
+import re
+import importlib.metadata as md
+
+NAME_RE = re.compile(r'^\s*([A-Za-z0-9][A-Za-z0-9._-]*)')
+
+def normalize_name(value):
+    return re.sub(r'[-_.]+', '-', (value or '').strip()).lower()
+
+def parse_requirement_name(requirement):
+    if not isinstance(requirement, str):
+        return ''
+    match = NAME_RE.match(requirement)
+    if not match:
+        return ''
+    return normalize_name(match.group(1))
+
+nodes = []
+for distribution in md.distributions():
+    metadata = distribution.metadata
+    raw_name = (metadata.get('Name') or '').strip() or (getattr(distribution, 'name', '') or '').strip()
+    if not raw_name:
+        continue
+
+    package_id = normalize_name(raw_name)
+    dependencies = []
+
+    for requirement in metadata.get_all('Requires-Dist') or []:
+        dependency_id = parse_requirement_name(requirement)
+        if dependency_id and dependency_id != package_id:
+            dependencies.append(dependency_id)
+
+    nodes.append(
+        {
+            'id': package_id,
+            'name': raw_name,
+            'version': (distribution.version or '').strip(),
+            'dependencies': sorted(set(dependencies)),
+        }
+    )
+
+nodes.sort(key=lambda item: item['name'].lower())
+print(json.dumps(nodes))
+"#;
+
+const UV_COMMAND_OUTPUT_EVENT: &str = "uv-command-output";
+
 pub fn uv_version(uv_binary_path: Option<String>) -> String {
     let binary = match resolve_uv_binary(uv_binary_path) {
         Ok(binary) => binary,
@@ -118,11 +214,13 @@ pub fn uv_version(uv_binary_path: Option<String>) -> String {
 }
 
 pub fn uv_add(
+    window: &Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     requirement: String,
     dev: bool,
     optional_group: Option<String>,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let requirement = required_text("Requirement", requirement)?;
     let mut args = vec!["add".to_string()];
@@ -140,13 +238,15 @@ pub fn uv_add(
     }
 
     args.push(requirement);
-    run_uv_command(project_dir, uv_binary_path, args)
+    run_uv_command(window, project_dir, uv_binary_path, args, stream_id)
 }
 
 pub fn uv_lock(
+    window: &Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     check_only: bool,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let mut args = vec!["lock".to_string()];
 
@@ -154,14 +254,16 @@ pub fn uv_lock(
         args.push("--check".to_string());
     }
 
-    run_uv_command(project_dir, uv_binary_path, args)
+    run_uv_command(window, project_dir, uv_binary_path, args, stream_id)
 }
 
 pub fn uv_sync(
+    window: &Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     frozen: bool,
     no_dev: bool,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let mut args = vec!["sync".to_string()];
 
@@ -173,13 +275,15 @@ pub fn uv_sync(
         args.push("--no-dev".to_string());
     }
 
-    run_uv_command(project_dir, uv_binary_path, args)
+    run_uv_command(window, project_dir, uv_binary_path, args, stream_id)
 }
 
 pub fn uv_upgrade(
+    window: &Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let package_name = required_text("Package name", package_name)?;
     let args = vec![
@@ -188,18 +292,20 @@ pub fn uv_upgrade(
         package_name,
     ];
 
-    run_uv_command(project_dir, uv_binary_path, args)
+    run_uv_command(window, project_dir, uv_binary_path, args, stream_id)
 }
 
 pub fn uv_uninstall(
+    window: &Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let package_name = required_text("Package name", package_name)?;
     let args = vec!["remove".to_string(), package_name];
 
-    run_uv_command(project_dir, uv_binary_path, args)
+    run_uv_command(window, project_dir, uv_binary_path, args, stream_id)
 }
 
 pub fn is_valid_project_root(project_dir: String) -> Result<bool, String> {
@@ -234,9 +340,11 @@ pub fn list_project_files(project_dir: String) -> Result<Vec<ProjectFileNode>, S
 }
 
 pub fn uv_direct_install(
+    window: &Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
     requirement: String,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let requirement = required_text("Requirement", requirement)?;
     let interpreter = validate_interpreter_path(interpreter_path)?;
@@ -249,13 +357,15 @@ pub fn uv_direct_install(
         requirement,
     ];
 
-    run_uv_direct_command(uv_binary_path, args)
+    run_uv_direct_command(window, uv_binary_path, args, stream_id)
 }
 
 pub fn uv_direct_upgrade(
+    window: &Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let package_name = required_text("Package name", package_name)?;
     let interpreter = validate_interpreter_path(interpreter_path)?;
@@ -269,13 +379,15 @@ pub fn uv_direct_upgrade(
         package_name,
     ];
 
-    run_uv_direct_command(uv_binary_path, args)
+    run_uv_direct_command(window, uv_binary_path, args, stream_id)
 }
 
 pub fn uv_direct_uninstall(
+    window: &Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
     package_name: String,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let package_name = required_text("Package name", package_name)?;
     let interpreter = validate_interpreter_path(interpreter_path)?;
@@ -288,16 +400,19 @@ pub fn uv_direct_uninstall(
         package_name,
     ];
 
-    run_uv_direct_command(uv_binary_path, args)
+    run_uv_direct_command(window, uv_binary_path, args, stream_id)
 }
 
 pub fn uv_direct_update_all(
+    window: &Window,
     interpreter_path: String,
     uv_binary_path: Option<String>,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let interpreter = validate_interpreter_path(interpreter_path)?;
     let interpreter_value = interpreter.to_string_lossy().to_string();
     let binary = resolve_uv_binary(uv_binary_path)?;
+    let stream_target = stream_target(window, stream_id);
 
     let list_args = vec![
         "pip".to_string(),
@@ -309,22 +424,16 @@ pub fn uv_direct_update_all(
         "json".to_string(),
     ];
     let list_preview = format_command_preview_without_cwd(&binary, &list_args);
-    let list_output = Command::new(&binary)
-        .args(&list_args)
-        .output()
-        .map_err(|error| format!("Failed to run command {list_preview}: {error}"))?;
+    let mut list_command = Command::new(&binary);
+    list_command.args(&list_args);
+    let list_output = execute_command(&mut list_command, &list_preview, stream_target.clone())?;
+    let list_stdout = list_output.stdout;
+    let list_stderr = list_output.stderr;
 
-    let list_stdout = String::from_utf8_lossy(&list_output.stdout)
-        .trim()
-        .to_string();
-    let list_stderr = String::from_utf8_lossy(&list_output.stderr)
-        .trim()
-        .to_string();
-
-    if !list_output.status.success() {
+    if !list_output.success {
         return Ok(UvCommandResult {
             success: false,
-            exit_code: list_output.status.code().unwrap_or(-1),
+            exit_code: list_output.exit_code,
             stdout: list_stdout,
             stderr: list_stderr,
             command: list_preview,
@@ -376,26 +485,19 @@ pub fn uv_direct_update_all(
     ];
     install_args.extend(package_names.clone());
     let install_preview = format_command_preview_without_cwd(&binary, &install_args);
-
-    let install_output = Command::new(&binary)
-        .args(&install_args)
-        .output()
-        .map_err(|error| format!("Failed to run command {install_preview}: {error}"))?;
-
-    let install_stdout = String::from_utf8_lossy(&install_output.stdout)
-        .trim()
-        .to_string();
-    let install_stderr = String::from_utf8_lossy(&install_output.stderr)
-        .trim()
-        .to_string();
+    let mut install_command = Command::new(&binary);
+    install_command.args(&install_args);
+    let install_output = execute_command(&mut install_command, &install_preview, stream_target)?;
+    let install_stdout = install_output.stdout;
+    let install_stderr = install_output.stderr;
     let combined_stdout = combine_output_lines(
         &format!("Outdated packages: {}", package_names.join(", ")),
         &install_stdout,
     );
 
     Ok(UvCommandResult {
-        success: install_output.status.success(),
-        exit_code: install_output.status.code().unwrap_or(-1),
+        success: install_output.success,
+        exit_code: install_output.exit_code,
         stdout: combined_stdout,
         stderr: combine_output_lines(&list_stderr, &install_stderr),
         command: format!("{list_preview} && {install_preview}"),
@@ -505,6 +607,72 @@ pub fn list_environment_packages(interpreter_path: String) -> Result<Vec<Package
     Ok(packages)
 }
 
+pub fn list_environment_dependency_graph(
+    interpreter_path: String,
+) -> Result<Vec<DependencyGraphPackage>, String> {
+    let interpreter = validate_interpreter_path(interpreter_path)?;
+
+    let output = Command::new(&interpreter)
+        .args(["-c", DEPENDENCY_TREE_QUERY_SCRIPT])
+        .output()
+        .map_err(|error| {
+            format!(
+                "Failed to run interpreter '{}': {error}",
+                interpreter.display()
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Failed to read dependency graph from '{}': {}",
+            interpreter.display(),
+            stderr.trim()
+        ));
+    }
+
+    let raw_json = String::from_utf8_lossy(&output.stdout);
+    if raw_json.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let raw_items: Vec<RawDependencyGraphItem> = serde_json::from_str(&raw_json)
+        .map_err(|error| format!("Failed to parse dependency graph JSON: {error}"))?;
+
+    let mut items = raw_items
+        .into_iter()
+        .map(|item| {
+            let name = item.name.trim().to_string();
+            let fallback_id = normalize_package_id(&name);
+            let id = normalize_package_id(if item.id.trim().is_empty() {
+                &fallback_id
+            } else {
+                &item.id
+            });
+
+            let dependencies = item
+                .dependencies
+                .into_iter()
+                .map(|entry| normalize_package_id(&entry))
+                .filter(|entry| !entry.is_empty() && entry != &id)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            DependencyGraphPackage {
+                id,
+                name,
+                version: item.version.trim().to_string(),
+                dependencies,
+            }
+        })
+        .filter(|item| !item.id.is_empty() && !item.name.is_empty())
+        .collect::<Vec<_>>();
+
+    items.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    Ok(items)
+}
+
 fn environment_roots(explicit_root: Option<String>) -> Vec<PathBuf> {
     let explicit_root = explicit_root
         .map(|value| value.trim().to_string())
@@ -558,7 +726,10 @@ fn read_project_directory_children(directory: &Path) -> Result<Vec<ProjectFileNo
     Ok(nodes)
 }
 
-fn build_project_file_node(path: PathBuf, metadata: fs::Metadata) -> Result<ProjectFileNode, String> {
+fn build_project_file_node(
+    path: PathBuf,
+    metadata: fs::Metadata,
+) -> Result<ProjectFileNode, String> {
     let file_type = metadata.file_type();
     let is_symlink = file_type.is_symlink();
     let is_directory = file_type.is_dir() && !is_symlink;
@@ -651,48 +822,151 @@ fn read_python_version(interpreter_path: &Path) -> String {
 }
 
 fn run_uv_command(
+    window: &Window,
     project_dir: String,
     uv_binary_path: Option<String>,
     args: Vec<String>,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let project_path = validate_project_directory(project_dir)?;
     let binary = resolve_uv_binary(uv_binary_path)?;
     let command_preview = format_command_preview(&binary, &args, &project_path);
-
-    let output = Command::new(&binary)
-        .current_dir(&project_path)
-        .args(&args)
-        .output()
-        .map_err(|error| format!("Failed to run command {command_preview}: {error}"))?;
+    let mut command = Command::new(&binary);
+    command.current_dir(&project_path).args(&args);
+    let output = execute_command(
+        &mut command,
+        &command_preview,
+        stream_target(window, stream_id),
+    )?;
 
     Ok(UvCommandResult {
-        success: output.status.success(),
-        exit_code: output.status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        success: output.success,
+        exit_code: output.exit_code,
+        stdout: output.stdout,
+        stderr: output.stderr,
         command: command_preview,
     })
 }
 
 fn run_uv_direct_command(
+    window: &Window,
     uv_binary_path: Option<String>,
     args: Vec<String>,
+    stream_id: Option<String>,
 ) -> Result<UvCommandResult, String> {
     let binary = resolve_uv_binary(uv_binary_path)?;
     let command_preview = format_command_preview_without_cwd(&binary, &args);
-
-    let output = Command::new(&binary)
-        .args(&args)
-        .output()
-        .map_err(|error| format!("Failed to run command {command_preview}: {error}"))?;
+    let mut command = Command::new(&binary);
+    command.args(&args);
+    let output = execute_command(
+        &mut command,
+        &command_preview,
+        stream_target(window, stream_id),
+    )?;
 
     Ok(UvCommandResult {
-        success: output.status.success(),
-        exit_code: output.status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        success: output.success,
+        exit_code: output.exit_code,
+        stdout: output.stdout,
+        stderr: output.stderr,
         command: command_preview,
     })
+}
+
+fn stream_target(window: &Window, stream_id: Option<String>) -> Option<CommandStreamTarget> {
+    let stream_id = stream_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())?;
+
+    Some(CommandStreamTarget {
+        window: window.clone(),
+        stream_id,
+    })
+}
+
+fn execute_command(
+    command: &mut Command,
+    command_preview: &str,
+    stream_target: Option<CommandStreamTarget>,
+) -> Result<CommandRunResult, String> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Failed to run command {command_preview}: {error}"))?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| format!("Failed to capture stdout for command {command_preview}."))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| format!("Failed to capture stderr for command {command_preview}."))?;
+
+    let stdout_target = stream_target.clone();
+    let stderr_target = stream_target;
+    let stdout_reader = thread::spawn(move || read_stream_pipe(stdout, "stdout", stdout_target));
+    let stderr_reader = thread::spawn(move || read_stream_pipe(stderr, "stderr", stderr_target));
+
+    let status = child
+        .wait()
+        .map_err(|error| format!("Failed to wait for command {command_preview}: {error}"))?;
+
+    let stdout_text = stdout_reader
+        .join()
+        .map_err(|_| format!("Failed to join stdout reader for command {command_preview}."))??;
+    let stderr_text = stderr_reader
+        .join()
+        .map_err(|_| format!("Failed to join stderr reader for command {command_preview}."))??;
+
+    Ok(CommandRunResult {
+        success: status.success(),
+        exit_code: status.code().unwrap_or(-1),
+        stdout: stdout_text.trim().to_string(),
+        stderr: stderr_text.trim().to_string(),
+    })
+}
+
+fn read_stream_pipe<R: Read>(
+    mut reader: R,
+    channel: &'static str,
+    stream_target: Option<CommandStreamTarget>,
+) -> Result<String, String> {
+    let mut output = Vec::new();
+    let mut buffer = [0_u8; 4096];
+
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(count) => {
+                let chunk = &buffer[..count];
+                output.extend_from_slice(chunk);
+
+                if let Some(target) = &stream_target {
+                    let chunk_text = String::from_utf8_lossy(chunk);
+                    emit_command_chunk(target, channel, chunk_text.as_ref());
+                }
+            }
+            Err(error) => return Err(format!("Failed to read {channel}: {error}")),
+        }
+    }
+
+    Ok(String::from_utf8_lossy(&output).to_string())
+}
+
+fn emit_command_chunk(target: &CommandStreamTarget, channel: &'static str, chunk: &str) {
+    if chunk.is_empty() {
+        return;
+    }
+
+    let payload = UvCommandOutputEvent {
+        stream_id: target.stream_id.clone(),
+        channel: channel.to_string(),
+        chunk: chunk.to_string(),
+    };
+
+    let _ = target.window.emit(UV_COMMAND_OUTPUT_EVENT, payload);
 }
 
 fn validate_project_directory(project_dir: String) -> Result<PathBuf, String> {
@@ -755,6 +1029,37 @@ fn resolve_uv_binary(uv_binary_path: Option<String>) -> Result<String, String> {
     }
 
     Ok("uv".to_string())
+}
+
+fn normalize_package_id(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut normalized = String::new();
+    let mut previous_was_separator = false;
+
+    for character in trimmed.chars() {
+        if character.is_ascii_alphanumeric() {
+            normalized.push(character.to_ascii_lowercase());
+            previous_was_separator = false;
+            continue;
+        }
+
+        if character == '-' || character == '_' || character == '.' {
+            if !previous_was_separator && !normalized.is_empty() {
+                normalized.push('-');
+                previous_was_separator = true;
+            }
+        }
+    }
+
+    while normalized.ends_with('-') {
+        normalized.pop();
+    }
+
+    normalized
 }
 
 fn required_text(label: &str, value: String) -> Result<String, String> {
