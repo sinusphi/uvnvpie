@@ -4,7 +4,7 @@
   <img src="assets/shot_01.png" alt="screenshot 01" />
 </p>
 
-EN | [DE](README.md)
+[EN](README.md) | DE
 
 [![Rust: 1.77+](https://img.shields.io/badge/Rust-1.77%2B-brown?logo=rust&logoColor=gold)](https://www.rust-lang.org) 
 [![Tauri: 2.x](https://img.shields.io/badge/Tauri-2.x-yellow?logo=tauri&logoColor=cyan)](https://v2.tauri.app) 
@@ -21,10 +21,10 @@ Moderner Manager für Python-Virtual-Umgebungen. Entwickelt mit Rust + Tauri, nu
 
 | Bereich | Stand |
 | --- | --- |
-| Version | **v0.1.1** / **2026-02-17** |
+| Version | **v0.1.2** / **2026-03-02** |
 | Plattformen | Linux, Windows |
-| Live-Daten | Umgebungen, Paketlisten, `uv --version` |
-| Paketaktionen | In der UI vorhanden, aktuell simuliert |
+| Live-Daten | Umgebungen, Paketlisten, `uv`-Ausfuhrung, OSV-Scan |
+| Management-Status | Grösstenteils live, aber Umgebungserstellung noch nicht implementiert |
 
 ## Funktionsumfang
 
@@ -103,10 +103,13 @@ Eine Umgebung wird erkannt, wenn ein Interpreter unter einem dieser Pfade gefund
 
 ## Bekannte Grenzen
 
-- `Install`, `Upgrade`, `Uninstall`, `Update All` und `Export Requirements` sind aktuell Mock-Aktionen.
-- Tabs für `Dependency Tree` und `Requirements` sind Platzhalter.
-- Die Einstellung `uvBinaryPath` wird gespeichert, aber derzeit noch nicht für Command-Ausführung verwendet.
+- Der meiste Management-Workflow ist live (`Install`, `Upgrade`, `Uninstall`, `Update All`, Requirements-Export).
+- `+ Umgebung erstellen` ist in `v0.1.2` noch nicht implementiert.
+- Das sekundare **Actions**-Panel unten rechts startet noch Mock-Jobs.
+  Die primare Paket-Toolbar verwendet den echten `uv`-Ausfuhrungspfad.
 - Die Spalte `Latest` zeigt momentan denselben Wert wie `Version`.
+- Der Security-Scan hangt von externen OSV-Diensten ab und braucht Netzwerkzugriff.
+- Die Umgebungs-Suche pruft aktuell nur Verzeichnisse der ersten Ebene pro Root-Pfad.
 
 ## Changelog
 

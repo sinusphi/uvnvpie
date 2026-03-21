@@ -38,10 +38,12 @@ Built with Rust + Tauri, using `uv` as execution backend.
 
 | Area | Status |
 | --- | --- |
-| Version | **v0.1.1** |
+| Version | **v0.1.2** |
+| Release Date | **2026-03-02** |
 | Platforms | Linux, Windows |
 | Runtime | Desktop app (Tauri v2) |
 | Data Sources | Local Python metadata + `uv` + OSV API |
+| Management Scope | Most management workflows are operational; environment creation is still pending. |
 
 ## What Works Today
 
@@ -151,6 +153,7 @@ If native export fails in a runtime edge case, a browser-style download fallback
 
 ## Known Limitations
 
+- Creating new environments from the app UI is not implemented yet (`v0.1.2`).
 - The secondary **Actions** panel in the lower-right package area still triggers mock jobs.
   Primary package toolbar actions are the wired `uv` execution path.
 - The `Latest` package column currently mirrors the installed `Version`.
