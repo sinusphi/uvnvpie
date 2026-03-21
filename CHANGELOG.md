@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.1.2] - 2026-03-02
+
+### Added
+
+- Project/Direct workflows with Auto Switch mode in the title bar.
+- Split sidebar model for Environments and Projects, including recursive project explorer trees.
+- Dependency Tree tab with live graph metadata from installed interpreter packages.
+- Requirements tab with generated preview, copy, and file export support.
+- Security tab with OSV scanning, state handling, caching, and vulnerability detail hydration.
+- Direct `uv` execution paths for environment package actions (`install`, `upgrade`, `uninstall`, `update all`).
+- Theme presets and refreshed header visuals with Python/PyPI branding.
+
+### Changed
+
+- Package-management workflows now execute real `uv` commands with streamed output in the integrated console.
+- Backend command surface expanded for dependency graph loading, project validation, and direct-mode command handling.
+- Workspace model extended to handle separate project/environment trees with persisted UI state.
+- Release docs and screenshots refreshed for the current feature set.
+
+### Fixed
+
+- Restored persisted tabs/sidebar state on app startup in multi-workspace scenarios.
+- Improved direct-mode warning placement/formatting and tab close-button visuals.
+- Corrected bundled app icon path and applied additional UI polish fixes.
+
+### Notes
+
+- Environment management is mostly operational in `v0.1.2`, but creating new environments is still not implemented.
+
 ## [0.1.1] - 2026-02-17
 
 ### Added
