@@ -29,10 +29,12 @@ EN | [DE](README.de.md)
 [![React: 18.3.1](https://img.shields.io/badge/React-18.3.1-darkcyan?logo=react&logoColor=cyan)](https://react.dev)
 [![Vite: 7.3.1](https://img.shields.io/badge/Vite-7.3.1-purple?logo=vite&logoColor=gold)](https://vite.dev)
 [![Tailwind: 3.4.14](https://img.shields.io/badge/Tailwind-3.4.14-orange?logo=tailwindcss&logoColor=cyan)](https://tailwindcss.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-red.svg)](https://github.com/sinusphi/uvnvpie/blob/main/LICENSE)
 [![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou)
 
 Next-gen virtual environment manager for Python.
 Built with Rust + Tauri, using `uv` as execution backend.
+
 
 ## Project Status
 
@@ -44,6 +46,7 @@ Built with Rust + Tauri, using `uv` as execution backend.
 | Runtime | Desktop app (Tauri v2) |
 | Data Sources | Local Python metadata + `uv` + OSV API |
 | Management Scope | Most management workflows are operational; environment creation is still pending. |
+
 
 ## What Works Today
 
@@ -59,6 +62,7 @@ Built with Rust + Tauri, using `uv` as execution backend.
 - Native folder/file dialogs via `tauri-plugin-dialog`.
 - Multi-workspace sidebar model for Environments and Projects.
 
+
 ## Requirements
 
 - **Node.js** 20+
@@ -68,6 +72,7 @@ Built with Rust + Tauri, using `uv` as execution backend.
 - **uv** available in `PATH` or configured in app settings
 - **Tauri** system prerequisites:
   https://v2.tauri.app/start/prerequisites/
+
 
 ## Installation
 
@@ -95,6 +100,7 @@ pnpm dev
 pnpm tauri build
 ```
 
+
 ## Usage
 
 1. Start the app with `pnpm tauri dev`.
@@ -106,6 +112,7 @@ pnpm tauri build
    - `Requirements` (copy/export)
    - `Security` (OSV scan)
 5. Run package actions from the package toolbar; monitor output in the console panel.
+
 
 ## Environment Detection
 
@@ -123,6 +130,7 @@ An environment is recognized when one interpreter file exists:
 - `<env>/Scripts/python.exe`
 - `<env>/Scripts/python`
 
+
 ## Requirements Export
 
 Requirements export in the Requirements tab now uses:
@@ -131,6 +139,7 @@ Requirements export in the Requirements tab now uses:
 2. Backend write command (`write_text_file`)
 
 If native export fails in a runtime edge case, a browser-style download fallback is used.
+
 
 ## Backend Command Surface (Rust)
 
@@ -151,6 +160,7 @@ If native export fails in a runtime edge case, a browser-style download fallback
 - `uv_direct_uninstall`
 - `uv_direct_update_all`
 
+
 ## Known Limitations
 
 - Creating new environments from the app UI is not implemented yet (`v0.1.2`).
@@ -160,10 +170,23 @@ If native export fails in a runtime edge case, a browser-style download fallback
 - Security scan depends on external OSV services and requires network access.
 - Environment discovery scans only first-level child directories inside each configured root.
 
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
 
+
 ## License
 
-See [LICENSE](LICENSE).
+This project is licensed under the **MIT License** - see the [LICENSE](https://github.com/sinusphi/uvnvpie/blob/main/LICENSE) file for details.
+
+
+## Contributions
+
+Contributions are welcome. 
+
+* [Pull requests](https://github.com/sinusphi/uvnvpie/pulls)
+
+* [Bug reports](https://github.com/sinusphi/uvnvpie/issues)
+
+* [Feature requests](https://github.com/sinusphi/uvnvpie/issues)

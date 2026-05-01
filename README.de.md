@@ -4,6 +4,22 @@
   <img src="assets/shot_01.png" alt="screenshot 01" />
 </p>
 
+<p align="center">
+  <img src="assets/shot_02.png" alt="uvnvpie screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/shot_01.png" alt="uvnvpie screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/shot_03.png" alt="uvnvpie screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/shot_04.png" alt="uvnvpie screenshot" />
+</p>
+
 [EN](README.md) | DE
 
 [![Rust: 1.77+](https://img.shields.io/badge/Rust-1.77%2B-brown?logo=rust&logoColor=gold)](https://www.rust-lang.org) 
@@ -13,9 +29,11 @@
 [![React: 18.3.1](https://img.shields.io/badge/React-18.3.1-darkcyan?logo=react&logoColor=cyan)](https://react.dev) 
 [![Vite: 7.3.1](https://img.shields.io/badge/Vite-7.3.1-purple?logo=vite&logoColor=gold)](https://vite.dev) 
 [![Tailwind: 3.4.14](https://img.shields.io/badge/Tailwind-3.4.14-orange?logo=tailwindcss&logoColor=cyan)](https://tailwindcss.com) 
+[![License: MIT](https://img.shields.io/badge/License-MIT-red.svg)](https://github.com/sinusphi/uvnvpie/blob/main/LICENSE)
 [![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou) 
 
 Moderner Manager für Python-Virtual-Umgebungen. Entwickelt mit Rust + Tauri, nutzt uv für ultraschnelle Abhängigkeitsverwaltung. Entworfen für Entwickler, die maximale Performance und volle Kontrolle fordern.
+
 
 ## Projektstatus
 
@@ -26,6 +44,7 @@ Moderner Manager für Python-Virtual-Umgebungen. Entwickelt mit Rust + Tauri, nu
 | Live-Daten | Umgebungen, Paketlisten, `uv`-Ausfuhrung, OSV-Scan |
 | Management-Status | Grösstenteils live, aber Umgebungserstellung noch nicht implementiert |
 
+
 ## Funktionsumfang
 
 - Vollständiges Hauptfenster mit Sidebar, Header, Tabs, Paketliste, Details, Aktionen und Konsolenbereich.
@@ -35,6 +54,7 @@ Moderner Manager für Python-Virtual-Umgebungen. Entwickelt mit Rust + Tauri, nu
 - Sprachwechsel zwischen Deutsch und Englisch direkt in der App.
 - Benutzerdefinierte Titlebar mit Minimize/Maximize/Close.
 
+
 ## Voraussetzungen
 
 - **Node.js** 20+
@@ -42,6 +62,7 @@ Moderner Manager für Python-Virtual-Umgebungen. Entwickelt mit Rust + Tauri, nu
 - **Rust** stable (1.77+)
 - **Tauri**-Systemvoraussetzungen gemäß offizieller Doku:  
   https://v2.tauri.app/start/prerequisites/
+
 
 ## Installation
 
@@ -69,12 +90,14 @@ pnpm dev
 pnpm tauri build
 ```
 
+
 ## Nutzung
 
 1. App mit `pnpm tauri dev` starten.
 2. In den Einstellungen bei Bedarf ein eigenes Umgebungs-Root setzen.
 3. Umgebung in der Sidebar wählen.
 4. Pakete, Details und Konsolenausgabe im Hauptbereich prüfen.
+
 
 ## Umgebungs-Erkennung
 
@@ -92,6 +115,7 @@ Eine Umgebung wird erkannt, wenn ein Interpreter unter einem dieser Pfade gefund
 - `<env>/Scripts/python.exe`
 - `<env>/Scripts/python`
 
+
 ## Architektur
 
 - Frontend: React + TypeScript + Vite + Tailwind
@@ -100,6 +124,7 @@ Eine Umgebung wird erkannt, wenn ein Interpreter unter einem dieser Pfade gefund
   - `get_uv_version`
   - `list_environments`
   - `list_environment_packages`
+
 
 ## Bekannte Grenzen
 
@@ -111,10 +136,23 @@ Eine Umgebung wird erkannt, wenn ein Interpreter unter einem dieser Pfade gefund
 - Der Security-Scan hangt von externen OSV-Diensten ab und braucht Netzwerkzugriff.
 - Die Umgebungs-Suche pruft aktuell nur Verzeichnisse der ersten Ebene pro Root-Pfad.
 
+
 ## Changelog
 
 Siehe [CHANGELOG.md](CHANGELOG.md).
 
+
 ## Lizenz
 
-Siehe [LICENSE](LICENSE).
+This project is unter der **MIT License** lizensiert - für Details siehe [LICENSE](https://github.com/sinusphi/uvnvpie/blob/main/LICENSE).
+
+
+## Beitragen
+
+Beiträge sind willkommen. 
+
+* [Pull requests](https://github.com/sinusphi/uvnvpie/pulls)
+
+* [Bug reports](https://github.com/sinusphi/uvnvpie/issues)
+
+* [Feature requests](https://github.com/sinusphi/uvnvpie/issues)
