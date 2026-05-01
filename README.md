@@ -32,8 +32,8 @@ EN | [DE](README.de.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-red.svg)](https://github.com/sinusphi/uvnvpie/blob/main/LICENSE)
 [![donations: paypal](https://img.shields.io/badge/donations-paypal-darkblue?logo=paypal&logoColor=blue)](https://paypal.me/yserestou)
 
-Next-gen virtual environment manager for Python.
-Built with Rust + Tauri, using `uv` as execution backend.
+Next-generation virtual environment manager for Python.
+Built with Rust + Tauri and `uv` as the execution backend.
 
 
 ## Project Status
@@ -51,11 +51,11 @@ Built with Rust + Tauri, using `uv` as execution backend.
 ## What Works Today
 
 - Environment discovery from configurable root folders.
-- Package inventory per selected environment.
+- Package inventory for each selected environment.
 - Dependency Tree tab with live graph metadata from interpreter packages.
 - Requirements tab with generated preview, copy, and file export.
 - Security tab with live OSV vulnerability scan and detailed finding view.
-- Real `uv` command execution for package management actions in the main package toolbar.
+- Real `uv` command execution for package-management actions in the main package toolbar.
 - Streaming command output into the integrated console panel.
 - Project mode, Direct mode, and Auto Switch mode in the title bar.
 - Settings persistence via `tauri-plugin-store`.
@@ -133,7 +133,7 @@ An environment is recognized when one interpreter file exists:
 
 ## Requirements Export
 
-Requirements export in the Requirements tab now uses:
+Requirements export in the Requirements tab uses:
 
 1. Native save dialog (`tauri-plugin-dialog`)
 2. Backend write command (`write_text_file`)
@@ -161,11 +161,18 @@ If native export fails in a runtime edge case, a browser-style download fallback
 - `uv_direct_update_all`
 
 
+## Architecture
+
+- Frontend: React + TypeScript + Vite + Tailwind
+- Desktop runtime: Tauri v2
+- Backend: Rust/Tauri commands for local environment discovery, project files, file export, and `uv` execution
+
+
 ## Known Limitations
 
 - Creating new environments from the app UI is not implemented yet (`v0.1.2`).
 - The secondary **Actions** panel in the lower-right package area still triggers mock jobs.
-  Primary package toolbar actions are the wired `uv` execution path.
+  Primary package toolbar actions use the wired `uv` execution path.
 - The `Latest` package column currently mirrors the installed `Version`.
 - Security scan depends on external OSV services and requires network access.
 - Environment discovery scans only first-level child directories inside each configured root.
@@ -178,12 +185,12 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-This project is licensed under the **MIT License** - see the [LICENSE](https://github.com/sinusphi/uvnvpie/blob/main/LICENSE) file for details.
+This project is licensed under the **MIT License**. See [LICENSE](https://github.com/sinusphi/uvnvpie/blob/main/LICENSE) for details.
 
 
 ## Contributions
 
-Contributions are welcome. 
+Contributions are welcome.
 
 * [Pull requests](https://github.com/sinusphi/uvnvpie/pulls)
 
